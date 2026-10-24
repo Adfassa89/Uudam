@@ -23,6 +23,7 @@ function Gate() {
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="track/[id]" options={{ title: '' }} />
+          <Stack.Screen name="ar" options={{ headerShown: false, animation: 'fade' }} />
         </Stack>
       </LocationProvider>
     </DataProvider>

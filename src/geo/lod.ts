@@ -121,3 +121,14 @@ export function padBBox(b: BBox, fraction: number): BBox {
   const dy = (b.maxLat - b.minLat) * fraction;
   return { minLon: b.minLon - dx, minLat: b.minLat - dy, maxLon: b.maxLon + dx, maxLat: b.maxLat + dy };
 }
+
+/** One index per loaded feature list (shared by the map and the camera view). */
+const indexes = new WeakMap<MapFeature[], LayerIndex>();
+export function indexFor(features: MapFeature[]): LayerIndex {
+  let ix = indexes.get(features);
+  if (!ix) {
+    ix = new LayerIndex(features);
+    indexes.set(features, ix);
+  }
+  return ix;
+}

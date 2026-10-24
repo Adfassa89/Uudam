@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Marker, Polygon, Polyline, UrlTile } from 'react-native-maps';
-import { LayerIndex, type View } from '../geo/lod';
+import { indexFor, type View } from '../geo/lod';
 import type { Geometry, LonLat, MapFeature } from '../geo/types';
 import type { Basemap } from '../maps/basemaps';
 import type { LayerMeta, Waypoint } from '../storage/files';
@@ -14,17 +14,6 @@ import { colors } from './theme';
 export const MAX_DRAWN_FEATURES = 3000;
 /** Pins are much heavier to draw than lines, so they get a smaller budget. */
 const MAX_DRAWN_POINTS = 300;
-
-/** One index per loaded feature list; rebuilt only when a layer is (re)loaded. */
-const indexes = new WeakMap<MapFeature[], LayerIndex>();
-function indexFor(features: MapFeature[]) {
-  let ix = indexes.get(features);
-  if (!ix) {
-    ix = new LayerIndex(features);
-    indexes.set(features, ix);
-  }
-  return ix;
-}
 
 const toLatLng = ([lon, lat]: LonLat) => ({ latitude: lat, longitude: lon });
 

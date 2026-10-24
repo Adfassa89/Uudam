@@ -46,6 +46,9 @@ The app opens in Mongolian. Allow location access when asked.
    e-mail/Telegram and save it to "Files" first). For DXF, choose the coordinate system — the app
    suggests one and shows where the drawing will land. If it is not in Mongolia, the choice is wrong.
 3. **Map tab → Бичих:** walk/drive, then press **Зогсоох** and save. See it in the **Түүх** tab.
+4. **Camera view:** press the camera button on the map, allow camera access, and look around.
+   Open the settings (top right) to correct the direction if markers don't line up with a known point.
+   Accuracy depends on GPS (±3–10 m) and the compass (±2–5°): best for objects more than ~50 m away.
 
 ### Expo Go limitation: no recording with the screen off
 

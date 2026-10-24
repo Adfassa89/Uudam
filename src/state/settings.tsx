@@ -11,6 +11,14 @@ export interface Settings {
   customBasemaps: Basemap[];
   /** Minimum distance between recorded route points, in metres. */
   recordDistanceM: number;
+  /** Camera view: manual compass correction in degrees (+ turns the overlay right). */
+  arHeadingOffset: number;
+  /** Camera view: vertical field of view of the camera preview in degrees. */
+  arFov: number;
+  /** Camera view: show objects within this distance, metres. */
+  arRadiusM: number;
+  /** Camera view: your height from GPS, or from the terrain model + eye height. */
+  arHeight: 'terrain' | 'gps';
 }
 
 const DEFAULTS: Settings = {
@@ -19,6 +27,10 @@ const DEFAULTS: Settings = {
   basemapId: DEFAULT_BASEMAP_ID,
   customBasemaps: [],
   recordDistanceM: 5,
+  arHeadingOffset: 0,
+  arFov: 65,
+  arRadiusM: 1000,
+  arHeight: 'terrain',
 };
 
 const STORAGE_KEY = 'uudam.settings.v1';

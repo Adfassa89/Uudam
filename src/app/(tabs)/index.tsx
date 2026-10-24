@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -259,6 +260,7 @@ export default function MapScreen() {
         <RoundButton icon="download-outline" onPress={() => setDownloadOpen(true)} label={t('offline.title')} />
         <RoundButton icon="map-marker-plus-outline" onPress={saveMyLocation} label={t('waypoints.saveHere')} />
         <RoundButton icon="ruler" onPress={toggleMeasuring} label={t('measure.title')} active={measuring} />
+        <RoundButton icon="camera-outline" onPress={() => router.push('/ar')} label={t('ar.title')} />
       </View>
 
       <View style={[styles.topStack, { top: insets.top + 12 }]} pointerEvents="box-none">

@@ -39,6 +39,14 @@
           "isAndroidBackgroundLocationEnabled": false,
           "isAndroidForegroundServiceEnabled": true
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Uudam uses the camera to show map points and drawings over the live view. / Uudam камерын дүрс дээр газрын зургийн цэг, зураглалыг харуулахад камер ашиглана.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
       ]
     ]
   }
