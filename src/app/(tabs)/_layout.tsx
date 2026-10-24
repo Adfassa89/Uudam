@@ -16,6 +16,7 @@ export default function TabsLayout() {
     <Tabs screenOptions={{ tabBarActiveTintColor: colors.primary }}>
       <Tabs.Screen name="index" options={{ title: t('tabs.map'), headerShown: false, tabBarIcon: icon('map-outline') }} />
       <Tabs.Screen name="tracks" options={{ title: t('tabs.tracks'), tabBarIcon: icon('timeline-clock-outline') }} />
+      <Tabs.Screen name="waypoints" options={{ title: t('tabs.waypoints'), tabBarIcon: icon('map-marker-multiple-outline') }} />
       <Tabs.Screen name="layers" options={{ title: t('tabs.layers'), tabBarIcon: icon('layers-triple-outline') }} />
       <Tabs.Screen name="settings" options={{ title: t('tabs.settings'), tabBarIcon: icon('cog-outline') }} />
     </Tabs>

@@ -12,10 +12,14 @@ import { useData } from './data';
 import { useSettings } from './settings';
 
 const KEEP_AWAKE_TAG = 'uudam-recording';
+/** m/s; below this the GPS direction of travel is just noise. */
+const MIN_COURSE_SPEED = 1.5;
 
 interface LocationCtx {
   permission: 'unknown' | 'granted' | 'denied';
   current: TrackPoint | null;
+  /** Direction of travel from GPS (degrees from north) while moving; null when standing still. */
+  course: number | null;
   recording: boolean;
   /** 'background' keeps recording with the screen off; 'foreground' needs the app open. */
   recordingMode: recorder.RecordingMode | null;
@@ -35,6 +39,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const { addTrack } = useData();
   const [permission, setPermission] = useState<LocationCtx['permission']>('unknown');
   const [current, setCurrent] = useState<TrackPoint | null>(null);
+  const [course, setCourse] = useState<number | null>(null);
   const [recordingMode, setRecordingMode] = useState<recorder.RecordingMode | null>(null);
   const [points, setPoints] = useState<TrackPoint[]>([]);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
@@ -131,6 +136,9 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         (loc) => {
           const p = recorder.toTrackPoint(loc);
           setCurrent(p);
+          // GPS course is only meaningful when actually moving (> ~5 km/h).
+          const h = loc.coords.heading;
+          setCourse(h != null && h >= 0 && (p.speed ?? 0) > MIN_COURSE_SPEED ? h : null);
           recorder.addForegroundFixes([p]);
         },
       );
@@ -174,6 +182,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     () => ({
       permission,
       current,
+      course,
       recording: recordingMode != null,
       recordingMode,
       points,
@@ -182,7 +191,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       saveRecording,
       discardRecording,
     }),
-    [permission, current, recordingMode, points, startRecording, stopRecording, saveRecording, discardRecording],
+    [permission, current, course, recordingMode, points, startRecording, stopRecording, saveRecording, discardRecording],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

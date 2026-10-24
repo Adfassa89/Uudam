@@ -16,6 +16,7 @@ available in Settings. Code, comments and developer docs are in English.
 | **Base maps** | Satellite (Esri, Esri + labels, Google/Apple satellite & hybrid, Sentinel-2), street (OpenStreetMap, CARTO, Esri, Google/Apple), topographic / landscape (OpenTopoMap with contours, Esri topo, shaded relief, NatGeo, Google terrain), military (Soviet General Staff maps 1:200k – 1:25k), plus **your own tile servers** (e.g. a mine drone orthophoto). |
 | **Import** | **KML, KMZ, GPX** (already lat/lon). **DXF** with a coordinate-system dialog: WGS84, UTM 45N–50N (MONREF97), Pulkovo-1942 Gauss–Krüger zones 15–21 (with or without zone prefix), automatic guess, X/Y swap, CAD-layer filter, line simplification, arcs/bulges/circles/text/blocks. **DWG** is explained to the user (convert to DXF first — see below). |
 | **Position** | Live coordinates in UTM, decimal degrees or DMS; GPS elevation, accuracy, speed. Long-press any point → its coordinates, distance and bearing from you. |
+| **Waypoints & navigation** | Save points by long-pressing the map, from your GPS position, or by typing coordinates in decimal degrees, DMS, UTM (with or without zone) or Gauss–Krüger with zone prefix — the app shows how it read them. Navigate to any point: dashed line on the map, distance, bearing, height difference, time to arrive, and an arrow that points to the target (GPS direction when moving, compass when standing); the phone vibrates on arrival. Export all points as GPX/KML. |
 | **Route timeline** | Record routes (point every 1/5/10/25 m, poor GPS fixes filtered). Saved with timestamps, elevation, speed and accuracy, grouped by day. Detail page: map, distance, duration, ascent/descent, min/max elevation, speeds, **elevation profile**, full point log. Export **GPX** or **KML** (time-stamped, replays in Google Earth). **Keeps recording with the screen off** or the app in the background (Android shows a notification while recording). Every point is written to the phone immediately, so a crash or dead battery doesn't lose the route. |
 | **Offline** | Download any map area for use without signal (choose the detail level, see tile count and size first; resume or delete in Settings). Tiles you view are also cached automatically. Imported layers and routes are always stored on the phone. |
 
@@ -35,6 +36,7 @@ src/
   app/                 Screens (Expo Router: each file is a screen)
     (tabs)/index.tsx     Map
     (tabs)/tracks.tsx    Route timeline
+    (tabs)/waypoints.tsx Saved points
     (tabs)/layers.tsx    Imported layers + file import
     (tabs)/settings.tsx  Language, coordinate format, custom maps, cache
     track/[id].tsx       One recorded route

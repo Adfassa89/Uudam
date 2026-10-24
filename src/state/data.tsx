@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { featuresBBox } from '../geo/measure';
 import type { BBox, MapFeature } from '../geo/types';
 import * as store from '../storage/files';
-import type { LayerMeta, TrackMeta } from '../storage/files';
+import type { LayerMeta, TrackMeta, Waypoint } from '../storage/files';
 
 const LAYER_COLORS = ['#e6194b', '#f58231', '#ffe119', '#3cb44b', '#42d4f4', '#4363d8', '#911eb4', '#f032e6'];
 
@@ -19,9 +19,27 @@ interface DataCtx {
   removeTrack: (id: string) => void;
   renameTrack: (id: string, name: string) => void;
 
+  waypoints: Waypoint[];
+  addWaypoint: (w: Omit<Waypoint, 'id' | 'createdAt'>) => Waypoint;
+  updateWaypoint: (id: string, patch: Partial<Omit<Waypoint, 'id' | 'createdAt'>>) => void;
+  removeWaypoint: (id: string) => void;
+
+  /** Point being navigated to (a saved waypoint or any map point), shown on the map. */
+  navTarget: NavTarget | null;
+  setNavTarget: (t: NavTarget | null) => void;
+
   /** The map screen watches this and zooms to the box when it changes. */
   focus: { bbox: BBox; nonce: number } | null;
   focusOn: (bbox: BBox | null) => void;
+}
+
+export interface NavTarget {
+  name: string;
+  lat: number;
+  lon: number;
+  alt: number | null;
+  /** Set when the target is a saved waypoint, so renames/deletes follow it. */
+  waypointId?: string;
 }
 
 const Ctx = createContext<DataCtx | null>(null);
@@ -31,6 +49,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [tracks, setTracks] = useState<TrackMeta[]>(() => store.loadTrackIndex());
   const [layerFeatures, setLayerFeatures] = useState<Record<string, MapFeature[]>>({});
   const [focus, setFocus] = useState<DataCtx['focus']>(null);
+  const [waypoints, setWaypoints] = useState<Waypoint[]>(() => store.loadWaypoints());
+  const [navTarget, setNavTarget] = useState<NavTarget | null>(null);
 
   // Keep features in memory only for visible layers.
   useEffect(() => {
@@ -108,9 +128,77 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [saveTracks],
   );
 
+  const saveWaypointList = useCallback((fn: (prev: Waypoint[]) => Waypoint[]) => {
+    setWaypoints((prev) => {
+      const next = fn(prev);
+      store.saveWaypoints(next);
+      return next;
+    });
+  }, []);
+
+  const addWaypoint: DataCtx['addWaypoint'] = useCallback(
+    (w) => {
+      const wp: Waypoint = { ...w, id: store.newId(), createdAt: Date.now() };
+      saveWaypointList((prev) => [wp, ...prev]);
+      return wp;
+    },
+    [saveWaypointList],
+  );
+
+  const updateWaypoint: DataCtx['updateWaypoint'] = useCallback(
+    (id, patch) => {
+      saveWaypointList((prev) => prev.map((w) => (w.id === id ? { ...w, ...patch } : w)));
+      setNavTarget((t) => (t?.waypointId === id ? { ...t, ...patch } : t));
+    },
+    [saveWaypointList],
+  );
+
+  const removeWaypoint = useCallback(
+    (id: string) => {
+      saveWaypointList((prev) => prev.filter((w) => w.id !== id));
+      setNavTarget((t) => (t?.waypointId === id ? null : t));
+    },
+    [saveWaypointList],
+  );
+
   const value = useMemo(
-    () => ({ layers, layerFeatures, addLayer, updateLayer, removeLayer, tracks, addTrack, removeTrack, renameTrack, focus, focusOn }),
-    [layers, layerFeatures, addLayer, updateLayer, removeLayer, tracks, addTrack, removeTrack, renameTrack, focus, focusOn],
+    () => ({
+      layers,
+      layerFeatures,
+      addLayer,
+      updateLayer,
+      removeLayer,
+      tracks,
+      addTrack,
+      removeTrack,
+      renameTrack,
+      waypoints,
+      addWaypoint,
+      updateWaypoint,
+      removeWaypoint,
+      navTarget,
+      setNavTarget,
+      focus,
+      focusOn,
+    }),
+    [
+      layers,
+      layerFeatures,
+      addLayer,
+      updateLayer,
+      removeLayer,
+      tracks,
+      addTrack,
+      removeTrack,
+      renameTrack,
+      waypoints,
+      addWaypoint,
+      updateWaypoint,
+      removeWaypoint,
+      navTarget,
+      focus,
+      focusOn,
+    ],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

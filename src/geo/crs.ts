@@ -80,6 +80,12 @@ export function toUtm(lat: number, lon: number): UtmCoord {
   return { zone, easting, northing };
 }
 
+/** UTM (any zone, WGS84) → [lon, lat]. */
+export function fromUtm(zone: number, easting: number, northing: number, south = false): [number, number] {
+  const proj = `+proj=utm +zone=${zone}${south ? ' +south' : ''} +datum=WGS84 +units=m +no_defs`;
+  return proj4(proj, WGS84).forward([easting, northing]) as [number, number];
+}
+
 /**
  * Looks at a sample of drawing coordinates and guesses the CRS.
  * Returns null when nothing fits; the user always confirms the choice.

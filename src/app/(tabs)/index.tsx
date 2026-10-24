@@ -1,13 +1,15 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import MapView, { Marker, Polyline, type LatLng, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BasemapPicker } from '../../components/BasemapPicker';
 import { DownloadAreaSheet } from '../../components/DownloadAreaSheet';
-import { BasemapTiles, ImportedLayers } from '../../components/MapContent';
+import { BasemapTiles, ImportedLayers, WaypointMarkers } from '../../components/MapContent';
+import { NavigationCard } from '../../components/NavigationCard';
 import { colors } from '../../components/theme';
+import { WaypointDialog, type WaypointDraft } from '../../components/WaypointDialog';
 import { formatAlt, formatCoord, formatDistance, formatDuration } from '../../geo/format';
 import { bearing, haversine, trackStats } from '../../geo/measure';
 import type { TrackPoint } from '../../geo/types';
@@ -15,6 +17,7 @@ import { cancelDownload } from '../../offline/downloader';
 import { zoomForRegion } from '../../offline/tiles';
 import { useOfflineAreas } from '../../offline/useOfflineAreas';
 import { useData } from '../../state/data';
+import type { Waypoint } from '../../storage/files';
 import { useLocation } from '../../state/location';
 import { useSettings } from '../../state/settings';
 
@@ -26,7 +29,7 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const { settings, basemap } = useSettings();
-  const { layers, layerFeatures, focus } = useData();
+  const { layers, layerFeatures, focus, waypoints, navTarget, setNavTarget } = useData();
   const loc = useLocation();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [picked, setPicked] = useState<LatLng | null>(null);
@@ -35,6 +38,7 @@ export default function MapScreen() {
   const [mapReady, setMapReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [waypointDraft, setWaypointDraft] = useState<WaypointDraft | null>(null);
   const [region, setRegion] = useState<Region>(INITIAL_REGION);
   const { width } = useWindowDimensions();
   const offline = useOfflineAreas();
@@ -69,6 +73,27 @@ export default function MapScreen() {
       600,
     );
   }, [loc.current, mapReady, focus]);
+
+  const navigateToWaypoint = useCallback(
+    (w: Waypoint) => setNavTarget({ name: w.name, lat: w.lat, lon: w.lon, alt: w.alt, waypointId: w.id }),
+    [setNavTarget],
+  );
+
+  const navigateToPicked = () => {
+    if (!picked) return;
+    setNavTarget({ name: t('map.pointInfo'), lat: picked.latitude, lon: picked.longitude, alt: null });
+    setPicked(null);
+  };
+
+  const savePicked = () => {
+    if (!picked) return;
+    setWaypointDraft({ lat: picked.latitude, lon: picked.longitude });
+    setPicked(null);
+  };
+
+  const saveMyLocation = () => {
+    if (cur) setWaypointDraft({ lat: cur.lat, lon: cur.lon, alt: cur.alt });
+  };
 
   const centerOnMe = () => {
     if (!loc.current) return;
@@ -137,6 +162,21 @@ export default function MapScreen() {
             strokeWidth={4}
           />
         )}
+        <WaypointMarkers waypoints={waypoints} hint={t('nav.tapToNavigate')} onNavigate={navigateToWaypoint} />
+        {navTarget && cur && (
+          <Polyline
+            coordinates={[
+              { latitude: cur.lat, longitude: cur.lon },
+              { latitude: navTarget.lat, longitude: navTarget.lon },
+            ]}
+            strokeColor={colors.nav}
+            strokeWidth={3}
+            lineDashPattern={[12, 8]}
+          />
+        )}
+        {navTarget && !navTarget.waypointId && (
+          <Marker coordinate={{ latitude: navTarget.lat, longitude: navTarget.lon }} pinColor={colors.nav} />
+        )}
         {picked && <Marker coordinate={picked} pinColor="#ff9800" onPress={() => setPicked(null)} />}
       </MapView>
 
@@ -144,25 +184,37 @@ export default function MapScreen() {
         <RoundButton icon="layers-outline" onPress={() => setPickerOpen(true)} label={t('map.basemaps')} />
         <RoundButton icon="crosshairs-gps" onPress={centerOnMe} label={t('map.centerMe')} />
         <RoundButton icon="download-outline" onPress={() => setDownloadOpen(true)} label={t('offline.title')} />
+        <RoundButton icon="map-marker-plus-outline" onPress={saveMyLocation} label={t('waypoints.saveHere')} />
       </View>
 
-      {picked && (
-        <View style={[styles.pickedCard, { top: insets.top + 12 }]}>
-          <View style={styles.rowBetween}>
-            <Text style={styles.cardTitle}>{t('map.pointInfo')}</Text>
-            <Pressable onPress={() => setPicked(null)} hitSlop={10}>
-              <MaterialCommunityIcons name="close" size={18} color={colors.muted} />
-            </Pressable>
+      <View style={[styles.topStack, { top: insets.top + 12 }]} pointerEvents="box-none">
+        <NavigationCard />
+        {picked && (
+          <View style={styles.pickedCard}>
+            <View style={styles.rowBetween}>
+              <Text style={styles.cardTitle}>{t('map.pointInfo')}</Text>
+              <Pressable onPress={() => setPicked(null)} hitSlop={10}>
+                <MaterialCommunityIcons name="close" size={18} color={colors.muted} />
+              </Pressable>
+            </View>
+            <Text style={styles.mono}>{formatCoord(picked.latitude, picked.longitude, settings.coordFormat)}</Text>
+            {cur && (
+              <Text style={styles.small}>
+                {t('map.fromMe')}: {formatDistance(haversine(cur.lat, cur.lon, picked.latitude, picked.longitude))} ·{' '}
+                {t('map.bearing')}: {bearing(cur.lat, cur.lon, picked.latitude, picked.longitude).toFixed(0)}°
+              </Text>
+            )}
+            <View style={[styles.statsRow, { gap: 16 }]}>
+              <Pressable onPress={navigateToPicked} hitSlop={6}>
+                <Text style={{ color: colors.nav, fontWeight: '600' }}>{t('nav.navigate')}</Text>
+              </Pressable>
+              <Pressable onPress={savePicked} hitSlop={6}>
+                <Text style={{ color: colors.primary, fontWeight: '600' }}>{t('waypoints.savePoint')}</Text>
+              </Pressable>
+            </View>
           </View>
-          <Text style={styles.mono}>{formatCoord(picked.latitude, picked.longitude, settings.coordFormat)}</Text>
-          {cur && (
-            <Text style={styles.small}>
-              {t('map.fromMe')}: {formatDistance(haversine(cur.lat, cur.lon, picked.latitude, picked.longitude))} ·{' '}
-              {t('map.bearing')}: {bearing(cur.lat, cur.lon, picked.latitude, picked.longitude).toFixed(0)}°
-            </Text>
-          )}
-        </View>
-      )}
+        )}
+      </View>
 
       <View style={styles.panel}>
         {downloading && (
@@ -218,6 +270,7 @@ export default function MapScreen() {
       </View>
 
       <BasemapPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} />
+      <WaypointDialog draft={waypointDraft} onClose={() => setWaypointDraft(null)} />
       <DownloadAreaSheet
         visible={downloadOpen}
         onClose={() => setDownloadOpen(false)}
@@ -274,10 +327,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
   },
+  topStack: { position: 'absolute', left: 12, right: 70, gap: 8 },
   pickedCard: {
-    position: 'absolute',
-    left: 12,
-    right: 70,
     backgroundColor: '#fff',
     borderRadius: 10,
     padding: 10,

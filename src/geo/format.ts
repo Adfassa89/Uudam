@@ -49,3 +49,8 @@ export function formatDuration(totalSeconds: number): string {
 export function formatAlt(alt: number | null | undefined): string {
   return alt == null ? '—' : `${alt.toFixed(0)} m`;
 }
+
+const CARDINALS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+
+/** Compass point for a bearing in degrees (N, NE, E…). */
+export const cardinal = (deg: number) => CARDINALS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];

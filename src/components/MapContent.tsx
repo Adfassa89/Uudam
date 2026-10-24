@@ -2,8 +2,9 @@ import { memo } from 'react';
 import { Marker, Polygon, Polyline, UrlTile } from 'react-native-maps';
 import type { LonLat, MapFeature } from '../geo/types';
 import type { Basemap } from '../maps/basemaps';
-import type { LayerMeta } from '../storage/files';
+import type { LayerMeta, Waypoint } from '../storage/files';
 import { tileCacheDir } from '../storage/files';
+import { colors } from './theme';
 
 /** Phones slow down badly with many thousands of map shapes, so we cap what is drawn. */
 export const MAX_DRAWN_FEATURES = 4000;
@@ -92,4 +93,32 @@ export const ImportedLayers = memo(function ImportedLayers({
     }
   }
   return <>{out}</>;
+});
+
+/** Saved waypoints; tapping a pin's label starts navigation to it. */
+export const WaypointMarkers = memo(function WaypointMarkers({
+  waypoints,
+  hint,
+  onNavigate,
+}: {
+  waypoints: Waypoint[];
+  /** Text under the name in the pin's label, e.g. "Tap to navigate". */
+  hint: string;
+  onNavigate: (w: Waypoint) => void;
+}) {
+  return (
+    <>
+      {waypoints.map((w) => (
+        <Marker
+          key={w.id}
+          coordinate={{ latitude: w.lat, longitude: w.lon }}
+          title={w.name}
+          description={hint}
+          pinColor={colors.nav}
+          tracksViewChanges={false}
+          onCalloutPress={() => onNavigate(w)}
+        />
+      ))}
+    </>
+  );
 });

@@ -94,6 +94,23 @@ export const activeTrackFile = () => new File(tracksDir(), 'active.ndjson');
 /** Exists only while a recording is in progress; holds its settings (see tracking/recorder.ts). */
 export const recordingStateFile = () => new File(tracksDir(), 'recording.json');
 
+// ---------- Waypoints ----------
+
+export interface Waypoint {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  /** Elevation in metres if known (GPS or typed in). */
+  alt: number | null;
+  note?: string;
+  createdAt: number;
+}
+
+const waypointsFile = () => new File(dir('waypoints'), 'waypoints.json');
+export const loadWaypoints = (): Waypoint[] => readJson(waypointsFile(), []);
+export const saveWaypoints = (list: Waypoint[]) => writeJson(waypointsFile(), list);
+
 /** Directory where map tiles are cached for offline use (Android). */
 export function tileCacheDir(basemapId: string): string {
   return dir(`tiles/${basemapId}`).uri;

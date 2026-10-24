@@ -4,6 +4,7 @@ export const colors = {
   primary: '#1565c0',
   danger: '#c62828',
   record: '#e53935',
+  nav: '#7b1fa2',
   text: '#1a1a1a',
   muted: '#6b6b6b',
   border: '#d9d9d9',
