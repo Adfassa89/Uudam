@@ -69,6 +69,8 @@ npm run typecheck
 
 ## 6. Building the app (needed for background recording)
 
+> Full step-by-step guide, including the Google Maps key and Google Play: **[PUBLISHING.md](PUBLISHING.md)**.
+
 Builds are made in Expo's cloud — you don't need Android Studio or a Mac.
 
 1. Create a free account at <https://expo.dev>.

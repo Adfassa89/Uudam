@@ -25,6 +25,8 @@ available in Settings. Code, comments and developer docs are in English.
 
 ## Quick start
 
+To install on an Android phone or publish to Google Play, see **[docs/PUBLISHING.md](docs/PUBLISHING.md)**.
+
 See **[docs/SETUP.md](docs/SETUP.md)** — written for people who have never programmed. Short version:
 
 ```bash
