@@ -1,6 +1,7 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import { PermissionsAndroid, Platform } from 'react-native';
 import type { TrackPoint } from '../geo/types';
 import { activeTrackFile, recordingStateFile } from '../storage/files';
 import { acceptPoints, parseNdjson, toNdjson } from './points';
@@ -25,6 +26,15 @@ import { acceptPoints, parseNdjson, toNdjson } from './points';
 export const BACKGROUND_TASK = 'uudam-route-recording';
 
 export type RecordingMode = 'background' | 'foreground';
+
+/** Translated texts for the recording notification and its permission prompt. */
+export interface NotificationText {
+  title: string;
+  body: string;
+  permissionTitle: string;
+  permissionMessage: string;
+  ok: string;
+}
 
 interface RecordingState {
   mode: RecordingMode;
@@ -108,7 +118,27 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(BACKGROUND_TASK
 
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
-async function startBackgroundUpdates(minDistanceM: number, notification: { title: string; body: string }) {
+/**
+ * Android 13+ hides the recording notification unless the user allows
+ * notifications. Recording works either way, so a refusal is not an error.
+ * The explanation dialog is shown by Android only after an earlier refusal.
+ */
+async function ensureNotificationPermission(text: NotificationText) {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 33) return;
+  try {
+    const permission = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+    if (await PermissionsAndroid.check(permission)) return;
+    await PermissionsAndroid.request(permission, {
+      title: text.permissionTitle,
+      message: text.permissionMessage,
+      buttonPositive: text.ok,
+    });
+  } catch {
+    // Ignore: the notification is optional for recording to work.
+  }
+}
+
+async function startBackgroundUpdates(minDistanceM: number, notification: NotificationText) {
   await Location.startLocationUpdatesAsync(BACKGROUND_TASK, {
     accuracy: Location.Accuracy.BestForNavigation,
     distanceInterval: minDistanceM,
@@ -133,11 +163,12 @@ async function startBackgroundUpdates(minDistanceM: number, notification: { titl
  */
 export async function startRecording(
   minDistanceM: number,
-  notification: { title: string; body: string },
+  notification: NotificationText,
   firstPoint: TrackPoint | null,
 ): Promise<RecordingMode> {
   let mode: RecordingMode = 'foreground';
   if (!isExpoGo) {
+    await ensureNotificationPermission(notification);
     try {
       await startBackgroundUpdates(minDistanceM, notification);
       mode = 'background';
@@ -159,7 +190,7 @@ export async function startRecording(
  * Called on app start while a recording is in progress: makes sure background
  * updates are still running (e.g. after the phone was restarted).
  */
-export async function resumeRecording(notification: { title: string; body: string }): Promise<RecordingMode | null> {
+export async function resumeRecording(notification: NotificationText): Promise<RecordingMode | null> {
   const s = getRecordingState();
   if (!s) return null;
   if (s.mode === 'background' && !(await Location.hasStartedLocationUpdatesAsync(BACKGROUND_TASK).catch(() => false))) {

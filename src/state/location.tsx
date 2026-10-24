@@ -45,7 +45,16 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     setPoints(pts);
   }, []);
 
-  const notification = useCallback(() => ({ title: t('map.notificationTitle'), body: t('map.notificationBody') }), [t]);
+  const notification = useCallback(
+    (): recorder.NotificationText => ({
+      title: t('map.notificationTitle'),
+      body: t('map.notificationBody'),
+      permissionTitle: t('map.notificationPermissionTitle'),
+      permissionMessage: t('map.notificationPermissionMessage'),
+      ok: t('common.ok'),
+    }),
+    [t],
+  );
 
   const persistTrack = useCallback(
     (pts: TrackPoint[], name: string) => {

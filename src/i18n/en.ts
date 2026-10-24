@@ -40,6 +40,9 @@ const en = {
     tooShort: 'The route has too few points to save.',
     notificationTitle: 'Uudam is recording your route',
     notificationBody: 'Tap to open the map. Stop recording in the app.',
+    notificationPermissionTitle: 'Allow notifications',
+    notificationPermissionMessage:
+      'While a route is being recorded with the screen off, Uudam shows a notification so you can see that recording is on and return to the map. Recording works even if you refuse.',
     backgroundOn: 'Recording continues with the screen off.',
     backgroundOff: 'Keep the app open: background recording is not available here (e.g. in Expo Go).',
   },
