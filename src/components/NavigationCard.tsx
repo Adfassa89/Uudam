@@ -3,6 +3,7 @@ import * as Location from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
+import { useTerrainElevation } from '../elevation/useTerrainElevation';
 import { cardinal, formatDistance, formatDuration } from '../geo/format';
 import { bearing, haversine } from '../geo/measure';
 import { useData } from '../state/data';
@@ -43,6 +44,10 @@ export function NavigationCard() {
   const { navTarget, setNavTarget } = useData();
   const { current, course } = useLocation();
   const compass = useCompass(navTarget != null);
+  // Height difference: stored elevation of the point if known, else the terrain model,
+  // compared with the terrain model at your position (or GPS when the model is unavailable).
+  const targetTerrain = useTerrainElevation(navTarget?.lat, navTarget?.lon);
+  const myTerrain = useTerrainElevation(current?.lat, current?.lon);
   const arrivedFor = useRef<string | null>(null);
 
   const key = navTarget ? `${navTarget.lat},${navTarget.lon}` : null;
@@ -63,7 +68,9 @@ export function NavigationCard() {
   // Moving: use GPS direction of travel (a compass is unreliable in a vehicle). Standing: compass.
   const facing = course ?? compass;
   const arrowRotation = brg == null ? 0 : facing == null ? brg : brg - facing;
-  const climb = navTarget.alt != null && current?.alt != null ? navTarget.alt - current.alt : null;
+  const targetAlt = navTarget.alt ?? targetTerrain;
+  const myAlt = myTerrain ?? current?.alt ?? null;
+  const climb = targetAlt != null && myAlt != null ? targetAlt - myAlt : null;
   const eta = dist != null && current?.speed != null && current.speed > 0.5 ? dist / current.speed : null;
 
   return (

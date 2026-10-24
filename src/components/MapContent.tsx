@@ -1,15 +1,30 @@
 import { memo } from 'react';
 import { Marker, Polygon, Polyline, UrlTile } from 'react-native-maps';
-import type { LonLat, MapFeature } from '../geo/types';
+import { LayerIndex, type View } from '../geo/lod';
+import type { Geometry, LonLat, MapFeature } from '../geo/types';
 import type { Basemap } from '../maps/basemaps';
 import type { LayerMeta, Waypoint } from '../storage/files';
 import { tileCacheDir } from '../storage/files';
 import { colors } from './theme';
 
-/** Phones slow down badly with many thousands of map shapes, so we cap what is drawn. */
-export const MAX_DRAWN_FEATURES = 4000;
+/**
+ * Phones slow down badly with many thousands of map shapes, so at most this many
+ * are drawn at once — chosen from what is on screen (see geo/lod.ts).
+ */
+export const MAX_DRAWN_FEATURES = 3000;
 /** Pins are much heavier to draw than lines, so they get a smaller budget. */
-const MAX_DRAWN_POINTS = 500;
+const MAX_DRAWN_POINTS = 300;
+
+/** One index per loaded feature list; rebuilt only when a layer is (re)loaded. */
+const indexes = new WeakMap<MapFeature[], LayerIndex>();
+function indexFor(features: MapFeature[]) {
+  let ix = indexes.get(features);
+  if (!ix) {
+    ix = new LayerIndex(features);
+    indexes.set(features, ix);
+  }
+  return ix;
+}
 
 const toLatLng = ([lon, lat]: LonLat) => ({ latitude: lat, longitude: lon });
 
@@ -41,13 +56,13 @@ export const BasemapTiles = memo(function BasemapTiles({ basemap }: { basemap: B
   );
 });
 
-function FeatureShape({ f, color }: { f: MapFeature; color: string }) {
+function FeatureShape({ f, geom, color }: { f: MapFeature; geom: Geometry; color: string }) {
   const c = f.color ?? color;
-  switch (f.geom.kind) {
+  switch (geom.kind) {
     case 'point':
       return (
         <Marker
-          coordinate={toLatLng(f.geom.coord)}
+          coordinate={toLatLng(geom.coord)}
           title={f.name}
           description={f.elevation != null ? `${f.elevation.toFixed(1)} m` : f.description}
           pinColor={c}
@@ -55,12 +70,12 @@ function FeatureShape({ f, color }: { f: MapFeature; color: string }) {
         />
       );
     case 'line':
-      return <Polyline coordinates={f.geom.coords.map(toLatLng)} strokeColor={c} strokeWidth={2} tappable={false} />;
+      return <Polyline coordinates={geom.coords.map(toLatLng)} strokeColor={c} strokeWidth={2} tappable={false} />;
     case 'polygon':
       return (
         <Polygon
-          coordinates={f.geom.rings[0].map(toLatLng)}
-          holes={f.geom.rings.slice(1).map((r) => r.map(toLatLng))}
+          coordinates={geom.rings[0].map(toLatLng)}
+          holes={geom.rings.slice(1).map((r) => r.map(toLatLng))}
           strokeColor={c}
           fillColor={`${c}33`}
           strokeWidth={2}
@@ -69,27 +84,30 @@ function FeatureShape({ f, color }: { f: MapFeature; color: string }) {
   }
 }
 
-/** All visible imported layers (KML, DXF…). Memoised so GPS updates don't redraw them. */
+/**
+ * All visible imported layers (KML, DXF…), limited to what is on screen and
+ * simplified for the zoom level. Re-queried only when the map stops moving.
+ */
 export const ImportedLayers = memo(function ImportedLayers({
   layers,
   features,
+  view,
 }: {
   layers: LayerMeta[];
   features: Record<string, MapFeature[]>;
+  view: View;
 }) {
   let budget = MAX_DRAWN_FEATURES;
   let pointBudget = MAX_DRAWN_POINTS;
   const out = [];
   for (const layer of layers) {
-    if (!layer.visible) continue;
-    const list = features[layer.id] ?? [];
-    for (let i = 0; i < list.length && budget > 0; i++) {
-      if (list[i].geom.kind === 'point') {
-        if (pointBudget <= 0) continue;
-        pointBudget--;
-      }
-      budget--;
-      out.push(<FeatureShape key={`${layer.id}-${i}`} f={list[i]} color={layer.color} />);
+    const list = layer.visible ? features[layer.id] : undefined;
+    if (!list || budget <= 0) continue;
+    const { items } = indexFor(list).query(view, budget, pointBudget);
+    for (const it of items) {
+      if (it.geom.kind === 'point') pointBudget--;
+      else budget--;
+      out.push(<FeatureShape key={`${layer.id}-${it.index}`} f={it.feature} geom={it.geom} color={layer.color} />);
     }
   }
   return <>{out}</>;

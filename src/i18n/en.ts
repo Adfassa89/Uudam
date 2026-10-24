@@ -26,7 +26,7 @@ const en = {
     permissionDenied: 'Location permission was denied. Enable it in the phone settings to see your position and record routes.',
     lat: 'Lat',
     lon: 'Lon',
-    altitude: 'Elevation',
+    altitude: 'GPS elevation',
     accuracy: 'Accuracy',
     speed: 'Speed',
     distance: 'Distance',
@@ -46,6 +46,7 @@ const en = {
       'While a route is being recorded with the screen off, Uudam shows a notification so you can see that recording is on and return to the map. Recording works even if you refuse.',
     backgroundOn: 'Recording continues with the screen off.',
     backgroundOff: 'Keep the app open: background recording is not available here (e.g. in Expo Go).',
+    terrain: 'Terrain',
   },
   basemaps: {
     satellite: 'Satellite',
@@ -90,7 +91,7 @@ const en = {
     dwgTitle: 'DWG files',
     dwgMessage:
       'DWG is a closed AutoCAD format that phones cannot read directly. Save the drawing as DXF (AutoCAD: Save As → DXF), or convert it with the free "ODA File Converter", then import the DXF here.',
-    tooMany: 'This layer is large ({{count}} objects). Only the first {{shown}} are drawn at once to keep the map smooth.',
+    tooMany: 'Large layer ({{count}} objects): the map shows the main shapes when zoomed out and more detail as you zoom in.',
   },
   dxf: {
     title: 'DXF import settings',
@@ -126,6 +127,10 @@ const en = {
     elevationProfile: 'Elevation profile',
     noElevation: 'No elevation data recorded.',
     timeline: 'Point log',
+    source_gps: 'GPS',
+    source_terrain: 'Terrain model',
+    terrainLoading: 'Loading terrain elevations…',
+    terrainFailed: 'Terrain elevations unavailable (no internet and not downloaded for this area).',
   },
   waypoints: {
     add: 'Add point',
@@ -143,6 +148,7 @@ const en = {
     note: 'Note (optional)',
     deleteConfirm: 'Delete point "{{name}}"?',
     export: 'Export',
+    fromTerrain: 'Fill from terrain model',
   },
   nav: {
     navigate: 'Navigate',
@@ -151,6 +157,29 @@ const en = {
     climb: 'Height',
     noHeading: 'Arrow shows direction from north (no compass).',
     tapToNavigate: 'Tap here to navigate',
+  },
+  elevation: {
+    terrainNote:
+      'Terrain model: satellite elevation data (SRTM, about 30 m detail, surveyed around the year 2000). Inside open pits and dumps it shows the original ground, not today\'s surface.',
+  },
+  measure: {
+    title: 'Measure',
+    line: 'Distance',
+    area: 'Area',
+    hint: 'Tap the map to add points. Press and hold a point, then drag, to move it.',
+    perimeter: 'perimeter',
+    lastSegment: 'Last segment',
+    points: '{{count}} points',
+    grade: 'Gradient',
+    maxGrade: 'steepest 50 m',
+    slopeLength: 'slope length',
+    undo: 'Undo',
+    clear: 'Clear',
+    profile: 'Elevation profile',
+    hideProfile: 'Hide profile',
+    save: 'Save as layer',
+    saved: 'Saved in Layers.',
+    defaultName: 'Measurement {{date}}',
   },
   offline: {
     title: 'Download map area',

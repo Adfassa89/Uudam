@@ -1,19 +1,22 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import MapView, { Marker, Polyline, type LatLng, type Region } from 'react-native-maps';
+import MapView, { Marker, Polygon, Polyline, type LatLng, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BasemapPicker } from '../../components/BasemapPicker';
 import { DownloadAreaSheet } from '../../components/DownloadAreaSheet';
 import { BasemapTiles, ImportedLayers, WaypointMarkers } from '../../components/MapContent';
+import { MeasurePanel, type MeasureMode } from '../../components/MeasurePanel';
 import { NavigationCard } from '../../components/NavigationCard';
 import { colors } from '../../components/theme';
 import { WaypointDialog, type WaypointDraft } from '../../components/WaypointDialog';
+import { useTerrainElevation } from '../../elevation/useTerrainElevation';
 import { formatAlt, formatCoord, formatDistance, formatDuration } from '../../geo/format';
 import { bearing, haversine, trackStats } from '../../geo/measure';
-import type { TrackPoint } from '../../geo/types';
+import type { LonLat, TrackPoint } from '../../geo/types';
 import { cancelDownload } from '../../offline/downloader';
+import { padBBox } from '../../geo/lod';
 import { zoomForRegion } from '../../offline/tiles';
 import { useOfflineAreas } from '../../offline/useOfflineAreas';
 import { useData } from '../../state/data';
@@ -29,7 +32,7 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const { settings, basemap } = useSettings();
-  const { layers, layerFeatures, focus, waypoints, navTarget, setNavTarget } = useData();
+  const { layers, layerFeatures, focus, waypoints, navTarget, setNavTarget, addLayer } = useData();
   const loc = useLocation();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [picked, setPicked] = useState<LatLng | null>(null);
@@ -39,10 +42,25 @@ export default function MapScreen() {
   const [busy, setBusy] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [waypointDraft, setWaypointDraft] = useState<WaypointDraft | null>(null);
+  const [measuring, setMeasuring] = useState(false);
+  const [measurePts, setMeasurePts] = useState<LonLat[]>([]);
+  const [measureMode, setMeasureMode] = useState<MeasureMode>('line');
   const [region, setRegion] = useState<Region>(INITIAL_REGION);
   const { width } = useWindowDimensions();
   const offline = useOfflineAreas();
   const downloading = offline.areas.find((a) => a.id === offline.activeId);
+  const regionBBox = useMemo(
+    () => ({
+      minLat: region.latitude - region.latitudeDelta / 2,
+      maxLat: region.latitude + region.latitudeDelta / 2,
+      minLon: region.longitude - region.longitudeDelta / 2,
+      maxLon: region.longitude + region.longitudeDelta / 2,
+    }),
+    [region],
+  );
+  const zoom = zoomForRegion(region.longitudeDelta, width);
+  // Slightly larger than the screen so small pans don't show empty edges.
+  const layerView = useMemo(() => ({ bbox: padBBox(regionBBox, 0.25), zoom }), [regionBBox, zoom]);
 
   // Tick once a second while recording so the timer updates.
   useEffect(() => {
@@ -87,12 +105,28 @@ export default function MapScreen() {
 
   const savePicked = () => {
     if (!picked) return;
-    setWaypointDraft({ lat: picked.latitude, lon: picked.longitude });
+    setWaypointDraft({ lat: picked.latitude, lon: picked.longitude, alt: pickedTerrain });
     setPicked(null);
   };
 
   const saveMyLocation = () => {
     if (cur) setWaypointDraft({ lat: cur.lat, lon: cur.lon, alt: cur.alt });
+  };
+
+  const toggleMeasuring = () => {
+    setMeasuring((m) => !m);
+    setPicked(null);
+  };
+
+  const saveMeasurement = () => {
+    if (measurePts.length < 2) return;
+    const name = t('measure.defaultName', { date: new Date().toLocaleString() });
+    const geom =
+      measureMode === 'area' && measurePts.length >= 3
+        ? { kind: 'polygon' as const, rings: [[...measurePts, measurePts[0]]] }
+        : { kind: 'line' as const, coords: measurePts };
+    addLayer({ name, source: 'measure', features: [{ geom, name }] });
+    Alert.alert(t('measure.title'), t('measure.saved'));
   };
 
   const centerOnMe = () => {
@@ -133,6 +167,8 @@ export default function MapScreen() {
   };
 
   const cur = loc.current;
+  const myTerrain = useTerrainElevation(cur?.lat, cur?.lon);
+  const pickedTerrain = useTerrainElevation(picked?.latitude, picked?.longitude);
   const stats = loc.recording ? trackStats(loc.points) : null;
   const elapsed = loc.recording && loc.points.length > 0 ? (now - loc.points[0].t) / 1000 : 0;
 
@@ -151,10 +187,16 @@ export default function MapScreen() {
         toolbarEnabled={false}
         onMapReady={() => setMapReady(true)}
         onRegionChangeComplete={setRegion}
-        onLongPress={(e) => setPicked(e.nativeEvent.coordinate)}
+        onLongPress={(e) => !measuring && setPicked(e.nativeEvent.coordinate)}
+        onPress={(e) => {
+          // Taps on pins also reach the map on Android; ignore those.
+          if (!measuring || e.nativeEvent.action === 'marker-press') return;
+          const { latitude, longitude } = e.nativeEvent.coordinate;
+          setMeasurePts((p) => [...p, [longitude, latitude]]);
+        }}
       >
         <BasemapTiles basemap={basemap} />
-        <ImportedLayers layers={layers} features={layerFeatures} />
+        <ImportedLayers layers={layers} features={layerFeatures} view={layerView} />
         {loc.points.length > 1 && (
           <Polyline
             coordinates={loc.points.map((p) => ({ latitude: p.lat, longitude: p.lon }))}
@@ -178,6 +220,37 @@ export default function MapScreen() {
           <Marker coordinate={{ latitude: navTarget.lat, longitude: navTarget.lon }} pinColor={colors.nav} />
         )}
         {picked && <Marker coordinate={picked} pinColor="#ff9800" onPress={() => setPicked(null)} />}
+        {measuring && measurePts.length >= 2 && measureMode === 'line' && (
+          <Polyline
+            coordinates={measurePts.map(([lon, lat]) => ({ latitude: lat, longitude: lon }))}
+            strokeColor={colors.measure}
+            strokeWidth={3}
+          />
+        )}
+        {measuring && measurePts.length >= 3 && measureMode === 'area' && (
+          <Polygon
+            coordinates={measurePts.map(([lon, lat]) => ({ latitude: lat, longitude: lon }))}
+            strokeColor={colors.measure}
+            fillColor="rgba(239,108,0,0.2)"
+            strokeWidth={3}
+          />
+        )}
+        {measuring &&
+          measurePts.map(([lon, lat], i) => (
+            <Marker
+              key={`m${i}`}
+              coordinate={{ latitude: lat, longitude: lon }}
+              anchor={{ x: 0.5, y: 0.5 }}
+              draggable
+              tracksViewChanges={false}
+              onDragEnd={(e) => {
+                const { latitude, longitude } = e.nativeEvent.coordinate;
+                setMeasurePts((p) => p.map((q, j) => (j === i ? [longitude, latitude] : q)));
+              }}
+            >
+              <View style={styles.vertex} />
+            </Marker>
+          ))}
       </MapView>
 
       <View style={[styles.sideButtons, { top: insets.top + 12 }]}>
@@ -185,10 +258,22 @@ export default function MapScreen() {
         <RoundButton icon="crosshairs-gps" onPress={centerOnMe} label={t('map.centerMe')} />
         <RoundButton icon="download-outline" onPress={() => setDownloadOpen(true)} label={t('offline.title')} />
         <RoundButton icon="map-marker-plus-outline" onPress={saveMyLocation} label={t('waypoints.saveHere')} />
+        <RoundButton icon="ruler" onPress={toggleMeasuring} label={t('measure.title')} active={measuring} />
       </View>
 
       <View style={[styles.topStack, { top: insets.top + 12 }]} pointerEvents="box-none">
         <NavigationCard />
+        {measuring && (
+          <MeasurePanel
+            points={measurePts}
+            mode={measureMode}
+            onMode={setMeasureMode}
+            onUndo={() => setMeasurePts((p) => p.slice(0, -1))}
+            onClear={() => setMeasurePts([])}
+            onSave={saveMeasurement}
+            onClose={toggleMeasuring}
+          />
+        )}
         {picked && (
           <View style={styles.pickedCard}>
             <View style={styles.rowBetween}>
@@ -202,6 +287,12 @@ export default function MapScreen() {
               <Text style={styles.small}>
                 {t('map.fromMe')}: {formatDistance(haversine(cur.lat, cur.lon, picked.latitude, picked.longitude))} ·{' '}
                 {t('map.bearing')}: {bearing(cur.lat, cur.lon, picked.latitude, picked.longitude).toFixed(0)}°
+              </Text>
+            )}
+            {pickedTerrain != null && (
+              <Text style={styles.small}>
+                {t('map.terrain')}: {formatAlt(pickedTerrain)}
+                {myTerrain != null ? ` (${pickedTerrain - myTerrain >= 0 ? '+' : ''}${(pickedTerrain - myTerrain).toFixed(0)} m)` : ''}
               </Text>
             )}
             <View style={[styles.statsRow, { gap: 16 }]}>
@@ -237,6 +328,7 @@ export default function MapScreen() {
             <Text style={styles.mono}>{formatCoord(cur.lat, cur.lon, settings.coordFormat)}</Text>
             <View style={styles.statsRow}>
               <Stat label={t('map.altitude')} value={formatAlt(cur.alt)} />
+              <Stat label={t('map.terrain')} value={formatAlt(myTerrain)} />
               <Stat label={t('map.accuracy')} value={cur.acc != null ? `±${cur.acc.toFixed(0)} m` : '—'} />
               <Stat label={t('map.speed')} value={cur.speed != null ? `${(cur.speed * 3.6).toFixed(1)} km/h` : '—'} />
             </View>
@@ -274,13 +366,8 @@ export default function MapScreen() {
       <DownloadAreaSheet
         visible={downloadOpen}
         onClose={() => setDownloadOpen(false)}
-        bbox={{
-          minLat: region.latitude - region.latitudeDelta / 2,
-          maxLat: region.latitude + region.latitudeDelta / 2,
-          minLon: region.longitude - region.longitudeDelta / 2,
-          maxLon: region.longitude + region.longitudeDelta / 2,
-        }}
-        zoom={zoomForRegion(region.longitudeDelta, width)}
+        bbox={regionBBox}
+        zoom={zoom}
       />
     </View>
   );
@@ -299,14 +386,16 @@ function RoundButton({
   icon,
   onPress,
   label,
+  active = false,
 }: {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   onPress: () => void;
   label: string;
+  active?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.roundBtn} accessibilityLabel={label}>
-      <MaterialCommunityIcons name={icon} size={24} color={colors.text} />
+    <Pressable onPress={onPress} style={[styles.roundBtn, active && { backgroundColor: colors.measure }]} accessibilityLabel={label}>
+      <MaterialCommunityIcons name={icon} size={24} color={active ? '#fff' : colors.text} />
     </Pressable>
   );
 }
@@ -326,6 +415,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
+  },
+  vertex: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#fff',
+    borderWidth: 3,
+    borderColor: colors.measure,
   },
   topStack: { position: 'absolute', left: 12, right: 70, gap: 8 },
   pickedCard: {

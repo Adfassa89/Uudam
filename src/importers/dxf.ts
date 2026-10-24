@@ -196,24 +196,51 @@ export interface DxfConvertOptions {
   layers?: string[];
 }
 
-export function dxfToFeatures(drawing: DxfDrawing, opts: DxfConvertOptions): MapFeature[] {
+function shapeConverter(opts: DxfConvertOptions) {
   const toLonLat = makeToWgs84(opts.crsId);
   const allowed = opts.layers ? new Set(opts.layers) : null;
-  const features: MapFeature[] = [];
-
-  for (const s of drawing.shapes) {
-    if (allowed && !allowed.has(s.layer)) continue;
+  return (s: RawShape): MapFeature | null => {
+    if (allowed && !allowed.has(s.layer)) return null;
     const coords: LonLat[] = s.pts.map((p) => (opts.swapXY ? toLonLat(p.y, p.x) : toLonLat(p.x, p.y)));
-    if (coords.some(([lon, lat]) => !Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lat) > 90)) continue;
+    if (coords.some(([lon, lat]) => !Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lat) > 90)) return null;
     const z = s.pts[0].z;
     const elevation = z !== 0 ? z : undefined;
     const name = s.label ?? (elevation != null ? `${s.layer} · ${elevation.toFixed(1)} m` : s.layer);
-    if (s.kind === 'point') {
-      features.push({ geom: { kind: 'point', coord: coords[0] }, name, color: s.color, elevation });
-    } else {
-      const line = opts.simplifyM > 0 ? simplify(coords, opts.simplifyM) : coords;
-      if (line.length >= 2) features.push({ geom: { kind: 'line', coords: line }, name, color: s.color, elevation });
+    if (s.kind === 'point') return { geom: { kind: 'point', coord: coords[0] }, name, color: s.color, elevation };
+    const line = opts.simplifyM > 0 ? simplify(coords, opts.simplifyM) : coords;
+    return line.length >= 2 ? { geom: { kind: 'line', coords: line }, name, color: s.color, elevation } : null;
+  };
+}
+
+export function dxfToFeatures(drawing: DxfDrawing, opts: DxfConvertOptions): MapFeature[] {
+  const convert = shapeConverter(opts);
+  const features: MapFeature[] = [];
+  for (const s of drawing.shapes) {
+    const f = convert(s);
+    if (f) features.push(f);
+  }
+  return features;
+}
+
+/**
+ * Same as dxfToFeatures, but works in chunks and pauses between them so the
+ * screen stays responsive (and can show progress) on drawings with 100 000+ objects.
+ */
+export async function dxfToFeaturesAsync(
+  drawing: DxfDrawing,
+  opts: DxfConvertOptions,
+  onProgress?: (fraction: number) => void,
+): Promise<MapFeature[]> {
+  const convert = shapeConverter(opts);
+  const features: MapFeature[] = [];
+  const CHUNK = 2000;
+  for (let i = 0; i < drawing.shapes.length; i += CHUNK) {
+    for (const s of drawing.shapes.slice(i, i + CHUNK)) {
+      const f = convert(s);
+      if (f) features.push(f);
     }
+    onProgress?.(Math.min(1, (i + CHUNK) / drawing.shapes.length));
+    await new Promise((r) => setTimeout(r, 0));
   }
   return features;
 }

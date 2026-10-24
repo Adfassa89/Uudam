@@ -2,6 +2,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { PermissionsAndroid, Platform } from 'react-native';
+import { ellipsoidToSeaLevel } from '../geo/geoid';
 import type { TrackPoint } from '../geo/types';
 import { activeTrackFile, recordingStateFile } from '../storage/files';
 import { acceptPoints, parseNdjson, toNdjson } from './points';
@@ -91,10 +92,14 @@ export function subscribe(listener: (added: TrackPoint[]) => void) {
   };
 }
 
+/** Android GPS altitude is above the ellipsoid; convert it to sea level like iPhones report. */
+const seaLevelAlt = (alt: number | null, lat: number, lon: number) =>
+  alt == null ? null : Platform.OS === 'android' ? ellipsoidToSeaLevel(alt, lat, lon) : alt;
+
 export const toTrackPoint = (l: Location.LocationObject): TrackPoint => ({
   lat: l.coords.latitude,
   lon: l.coords.longitude,
-  alt: l.coords.altitude,
+  alt: seaLevelAlt(l.coords.altitude, l.coords.latitude, l.coords.longitude),
   acc: l.coords.accuracy,
   speed: l.coords.speed != null && l.coords.speed >= 0 ? l.coords.speed : null,
   t: l.timestamp,

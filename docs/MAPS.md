@@ -56,7 +56,18 @@ Limits and behaviour:
   z18 (≈ 0.4 m/pixel) ≈ 2 900 tiles / 60 MB. Each extra level is about 4× more.
 - OpenStreetMap and OpenTopoMap forbid bulk downloading, so the button is disabled for them.
   Google/Apple native maps cannot be downloaded at all.
+- Each download also includes terrain elevation tiles (zoom 12, a few per area) so heights,
+  profiles and gradients work offline too.
 - Cached tiles are refreshed after 30 days when online; without internet the old tile keeps showing.
 - **Licences:** downloading areas from Esri, CARTO or the nakarte.me military maps is fine for
   testing, but a published app needs the provider's permission or a paid plan that allows offline
   use — or, best for a mine, your own tile server (see above).
+
+## Elevation data
+
+- **Terrain model:** [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (free, no key),
+  "terrarium" PNG format, used at zoom 12 (≈ 27 m per pixel in Mongolia). Sources for Mongolia are
+  mainly SRTM (NASA, ~2000). Attribution is shown in Settings → About.
+- **GPS height:** Android reports height above the WGS84 ellipsoid; the app converts it to sea level
+  with the EGM96 geoid (embedded 0.25° grid for 38–56°N, 80–126°E, max error 5 cm vs. the full model).
+  iPhones already report sea level.

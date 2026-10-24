@@ -37,7 +37,8 @@ export const newId = () => `${Date.now().toString(36)}${Math.random().toString(3
 export interface LayerMeta {
   id: string;
   name: string;
-  source: 'kml' | 'kmz' | 'gpx' | 'dxf';
+  /** 'measure' = a line or area saved from the measuring tool. */
+  source: 'kml' | 'kmz' | 'gpx' | 'dxf' | 'measure';
   color: string;
   visible: boolean;
   featureCount: number;

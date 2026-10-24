@@ -9,7 +9,7 @@ import { DxfImportDialog } from '../../components/DxfImportDialog';
 import { MAX_DRAWN_FEATURES } from '../../components/MapContent';
 import { colors, ui } from '../../components/theme';
 import type { MapFeature } from '../../geo/types';
-import { dxfToFeatures, parseDxf, type DxfConvertOptions, type DxfDrawing } from '../../importers/dxf';
+import { dxfToFeaturesAsync, parseDxf, type DxfConvertOptions, type DxfDrawing } from '../../importers/dxf';
 import { detectKind, parseGeographic } from '../../importers';
 import { useData } from '../../state/data';
 import { useLocation } from '../../state/location';
@@ -22,6 +22,7 @@ export default function LayersScreen() {
   const { layers, addLayer, updateLayer, removeLayer, focusOn } = useData();
   const { current } = useLocation();
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const [pendingDxf, setPendingDxf] = useState<{ name: string; drawing: DxfDrawing } | null>(null);
 
   const finishImport = (name: string, source: 'kml' | 'kmz' | 'gpx' | 'dxf', features: MapFeature[], crsId?: string) => {
@@ -77,11 +78,12 @@ export default function LayersScreen() {
     setBusy(true);
     await nextFrame();
     try {
-      finishImport(name, 'dxf', dxfToFeatures(drawing, opts), opts.crsId);
+      finishImport(name, 'dxf', await dxfToFeaturesAsync(drawing, opts, setProgress), opts.crsId);
     } catch (e) {
       Alert.alert(t('common.error'), t('layers.importFailed', { message: String((e as Error)?.message ?? e) }));
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -104,7 +106,10 @@ export default function LayersScreen() {
       {busy && (
         <View style={[ui.card, ui.row, { gap: 10 }]}>
           <ActivityIndicator />
-          <Text style={ui.text}>{t('layers.importing')}</Text>
+          <Text style={ui.text}>
+            {t('layers.importing')}
+            {progress != null ? ` ${Math.round(progress * 100)}%` : ''}
+          </Text>
         </View>
       )}
 
@@ -123,7 +128,7 @@ export default function LayersScreen() {
                     {item.name}
                   </Text>
                   <Text style={ui.muted}>
-                    {item.source.toUpperCase()} · {t('layers.features', { count: item.featureCount })}
+                    {item.source === 'measure' ? t('measure.title') : item.source.toUpperCase()} · {t('layers.features', { count: item.featureCount })}
                   </Text>
                 </View>
               </View>

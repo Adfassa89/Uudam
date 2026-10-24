@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
+import { DEM_CACHE_ID, DEM_TEMPLATE, DEM_ZOOM } from '../elevation/dem';
 import type { BBox } from '../geo/types';
 import type { Basemap } from '../maps/basemaps';
 import { newId, tileCacheDir } from '../storage/files';
@@ -40,15 +41,30 @@ const CONCURRENCY = 4;
 
 export const canDownload = (b: Basemap) => !!b.tiles && !b.noBulkDownload;
 
-/** The tile layers of a base map and the cache folder each one uses (must match MapContent). */
-export function tileLayers(b: Basemap) {
-  const layers = b.tiles ? [{ template: b.tiles, cacheId: b.id }] : [];
-  if (b.overlay) layers.push({ template: b.overlay, cacheId: `${b.id}-overlay` });
+interface TileLayer {
+  template: string;
+  /** Cache folder; must match MapContent / elevation/dem.ts. */
+  cacheId: string;
+  tms: boolean;
+  /** Download only this zoom level (elevation data) instead of the area's range. */
+  fixedZoom?: number;
+  /** Shared by every map, so deleting one area must not remove it. */
+  shared?: boolean;
+}
+
+/** Everything an offline area needs: the map's tile layers plus terrain elevation tiles. */
+export function tileLayers(b: Basemap): TileLayer[] {
+  const layers: TileLayer[] = b.tiles ? [{ template: b.tiles, cacheId: b.id, tms: !!b.tms }] : [];
+  if (b.overlay) layers.push({ template: b.overlay, cacheId: `${b.id}-overlay`, tms: !!b.tms });
+  layers.push({ template: DEM_TEMPLATE, cacheId: DEM_CACHE_ID, tms: false, fixedZoom: DEM_ZOOM, shared: true });
   return layers;
 }
 
+const zoomRange = (l: TileLayer, minZoom: number, maxZoom: number): [number, number] =>
+  l.fixedZoom != null ? [l.fixedZoom, l.fixedZoom] : [minZoom, maxZoom];
+
 export function estimateTiles(b: Basemap, bbox: BBox, maxZoom: number) {
-  return countTiles(bbox, OFFLINE_MIN_ZOOM, maxZoom) * tileLayers(b).length;
+  return tileLayers(b).reduce((n, l) => n + countTiles(bbox, ...zoomRange(l, OFFLINE_MIN_ZOOM, maxZoom)), 0);
 }
 
 // ---------- persistence ----------
@@ -147,7 +163,7 @@ async function run(area: OfflineArea, b: Basemap) {
   const layers = tileLayers(b).map((l) => ({ ...l, dir: tileCacheDir(l.cacheId) }));
   function* jobs() {
     for (const layer of layers)
-      for (const t of iterateTiles(area.bbox, area.minZoom, area.maxZoom)) yield { layer, ...t };
+      for (const t of iterateTiles(area.bbox, ...zoomRange(layer, area.minZoom, area.maxZoom))) yield { layer, ...t };
   }
   const queue = jobs();
 
@@ -183,11 +199,11 @@ async function run(area: OfflineArea, b: Basemap) {
         if (!dir.exists) dir.create({ intermediates: true });
         createdDirs.add(dirKey);
       }
-      const file = new File(dir, String(cacheRow(y, z, !!b.tms, Platform.OS)));
+      const file = new File(dir, String(cacheRow(y, z, layer.tms, Platform.OS)));
       if (file.exists) {
         done++;
         bytes += file.size ?? 0;
-      } else if (await fetchTile(tileUrl(layer.template, z, x, y, b.tms), file)) {
+      } else if (await fetchTile(tileUrl(layer.template, z, x, y, layer.tms), file)) {
         done++;
         bytes += file.size ?? 0;
       } else {
@@ -224,10 +240,11 @@ export async function deleteArea(areaId: string, b: Basemap | undefined) {
   const others = areas.filter((a) => a.basemapId === area.basemapId);
   let n = 0;
   for (const layer of tileLayers(b)) {
+    if (layer.shared) continue;
     const root = tileCacheDir(layer.cacheId);
     for (const t of iterateTiles(area.bbox, area.minZoom, area.maxZoom)) {
       if (others.some((o) => tileInArea(t, o))) continue;
-      const f = new File(root, `${t.z}/${t.x}/${cacheRow(t.y, t.z, !!b.tms, Platform.OS)}`);
+      const f = new File(root, `${t.z}/${t.x}/${cacheRow(t.y, t.z, layer.tms, Platform.OS)}`);
       if (f.exists) f.delete();
       // Yield now and then so the screen stays responsive during big deletes.
       if (++n % 500 === 0) await new Promise((r) => setTimeout(r, 0));

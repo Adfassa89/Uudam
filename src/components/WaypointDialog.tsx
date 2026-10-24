@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { terrainElevation } from '../elevation/dem';
 import { formatCoord } from '../geo/format';
 import { parseCoordinate } from '../geo/parse';
 import { useData } from '../state/data';
@@ -56,6 +57,15 @@ export function WaypointDialog({ draft, onClose }: Props) {
   const alt = altText.trim() === '' ? null : Number(altText.replace(',', '.'));
   const altValid = alt === null || Number.isFinite(alt);
 
+  const [terrainBusy, setTerrainBusy] = useState(false);
+  const fillFromTerrain = async () => {
+    if (!parsed) return;
+    setTerrainBusy(true);
+    const v = await terrainElevation(parsed.lat, parsed.lon);
+    setTerrainBusy(false);
+    if (v != null) setAltText(v.toFixed(1));
+  };
+
   const fillMyPosition = () => {
     if (!current) return;
     setCoordText(formatCoord(current.lat, current.lon, settings.coordFormat));
@@ -108,6 +118,9 @@ export function WaypointDialog({ draft, onClose }: Props) {
               onChangeText={setAltText}
               keyboardType="numbers-and-punctuation"
             />
+            <Pressable onPress={fillFromTerrain} disabled={!parsed || terrainBusy} style={{ marginTop: 6 }}>
+              <Text style={{ color: parsed && !terrainBusy ? colors.primary : colors.muted }}>{t('waypoints.fromTerrain')}</Text>
+            </Pressable>
 
             <Text style={styles.label}>{t('waypoints.note')}</Text>
             <TextInput style={[ui.input, { minHeight: 60 }]} value={note} onChangeText={setNote} multiline />

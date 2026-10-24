@@ -1,12 +1,13 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { ElevationChart } from '../../components/ElevationChart';
 import { BasemapTiles } from '../../components/MapContent';
 import { colors, ui } from '../../components/theme';
+import { terrainElevations } from '../../elevation/dem';
 import { formatAlt, formatCoord, formatDistance, formatDuration } from '../../geo/format';
 import { trackStats } from '../../geo/measure';
 import type { TrackPoint } from '../../geo/types';
@@ -14,6 +15,9 @@ import { useData } from '../../state/data';
 import { useSettings } from '../../state/settings';
 import { loadTrackPoints, writeExportFile } from '../../storage/files';
 import { toGpx, toKml } from '../../tracking/export';
+
+/** Terrain heights are looked up for at most this many points (evenly spaced). */
+const MAX_TERRAIN_POINTS = 1500;
 
 /** Log rows are thinned to at most this many so the list stays fast on long routes. */
 const MAX_LOG_ROWS = 500;
@@ -26,7 +30,34 @@ export default function TrackDetailScreen() {
   const mapRef = useRef<MapView>(null);
   const meta = tracks.find((tr) => tr.id === id);
   const points = useMemo(() => (id ? loadTrackPoints(id) : []), [id]);
-  const stats = useMemo(() => trackStats(points), [points]);
+  // Elevation source: GPS as recorded, or the terrain model along the route.
+  const [source, setSource] = useState<'gps' | 'terrain'>('gps');
+  const [terrainPoints, setTerrainPoints] = useState<TrackPoint[] | null>(null);
+  const [terrainState, setTerrainState] = useState<'idle' | 'loading' | 'failed'>('idle');
+  useEffect(() => {
+    if (source !== 'terrain' || terrainPoints || points.length === 0) return;
+    let cancelled = false;
+    setTerrainState('loading');
+    const step = Math.max(1, Math.ceil(points.length / MAX_TERRAIN_POINTS));
+    const sample = points.filter((_, i) => i % step === 0 || i === points.length - 1);
+    terrainElevations(sample).then((alts) => {
+      if (cancelled) return;
+      if (alts.every((a) => a == null)) {
+        setTerrainState('failed');
+        return;
+      }
+      setTerrainPoints(sample.map((p, i) => ({ ...p, alt: alts[i] })));
+      setTerrainState('idle');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [source, terrainPoints, points]);
+  const profilePoints = source === 'terrain' && terrainPoints ? terrainPoints : points;
+  const gpsStats = useMemo(() => trackStats(points), [points]);
+  const profileStats = useMemo(() => trackStats(profilePoints), [profilePoints]);
+  // Distance and time always come from the full GPS track; heights from the chosen source.
+  const stats = { ...gpsStats, ascentM: profileStats.ascentM, descentM: profileStats.descentM, minAlt: profileStats.minAlt, maxAlt: profileStats.maxAlt };
   const coords = useMemo(() => points.map((p) => ({ latitude: p.lat, longitude: p.lon })), [points]);
   const logRows = useMemo(() => {
     const step = Math.max(1, Math.ceil(points.length / MAX_LOG_ROWS));
@@ -107,7 +138,17 @@ export default function TrackDetailScreen() {
 
       <View style={ui.card}>
         <Text style={ui.h2}>{t('tracks.elevationProfile')}</Text>
-        <ElevationChart points={points} emptyText={t('tracks.noElevation')} />
+        <View style={[ui.row, { marginBottom: 8 }]}>
+          {(['gps', 'terrain'] as const).map((s) => (
+            <Pressable key={s} onPress={() => setSource(s)} style={[ui.chip, source === s && ui.chipActive]}>
+              <Text style={[ui.chipText, source === s && ui.chipTextActive]}>{t(`tracks.source_${s}`)}</Text>
+            </Pressable>
+          ))}
+        </View>
+        {source === 'terrain' && terrainState === 'loading' && <Text style={ui.muted}>{t('tracks.terrainLoading')}</Text>}
+        {source === 'terrain' && terrainState === 'failed' && <Text style={ui.muted}>{t('tracks.terrainFailed')}</Text>}
+        <ElevationChart points={profilePoints} emptyText={t('tracks.noElevation')} />
+        {source === 'terrain' && <Text style={[ui.muted, { marginTop: 6 }]}>{t('elevation.terrainNote')}</Text>}
       </View>
 
       <View style={[ui.row, { gap: 8, marginHorizontal: 12, marginTop: 12, flexWrap: 'wrap' }]}>

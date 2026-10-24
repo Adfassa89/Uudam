@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { formatBytes } from '../../components/DownloadAreaSheet';
 import { colors, ui } from '../../components/theme';
+import { DEM_ATTRIBUTION } from '../../elevation/dem';
 import type { CoordFormat } from '../../geo/format';
 import { LANGUAGES } from '../../i18n';
 import type { Basemap } from '../../maps/basemaps';
@@ -208,6 +209,7 @@ export default function SettingsScreen() {
       <View style={ui.card}>
         <Text style={ui.h2}>{t('settings.about')}</Text>
         <Text style={ui.muted}>Uudam {Constants.expoConfig?.version ?? ''}</Text>
+        <Text style={[ui.muted, { marginTop: 6, fontSize: 12 }]}>{DEM_ATTRIBUTION}</Text>
       </View>
     </ScrollView>
   );
