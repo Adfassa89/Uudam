@@ -47,6 +47,13 @@ The app opens in Mongolian. Allow location access when asked.
    suggests one and shows where the drawing will land. If it is not in Mongolia, the choice is wrong.
 3. **Map tab → Бичих:** walk/drive, then press **Зогсоох** and save. See it in the **Түүх** tab.
 
+### Expo Go limitation: no recording with the screen off
+
+Expo Go cannot record routes in the background. In Expo Go the app keeps the screen on while
+recording and shows a note under the Record button. For real field use, install a
+**development build** (step 6) — then recording continues with the screen off or the phone in
+your pocket.
+
 ## 5. Making changes
 
 Edit files in `src/` with VS Code and save — the app on your phone reloads automatically.
@@ -57,14 +64,30 @@ npm test
 npm run typecheck
 ```
 
-## 6. Building a real app for the stores (later)
+## 6. Building the app (needed for background recording)
 
-Expo Go is for development. To install the app without Expo Go, or publish it:
+Builds are made in Expo's cloud — you don't need Android Studio or a Mac.
 
 1. Create a free account at <https://expo.dev>.
 2. `npx eas-cli@latest login`
-3. `npx eas-cli@latest build --platform android` (gives you an `.apk`/`.aab`)
-   and `--platform ios` (needs an Apple Developer account, 99 USD/year).
+3. Pick a build type (profiles are defined in `eas.json`):
+   - **Development build** — like Expo Go but with all of this app's features; code changes still
+     reload instantly: `npx eas-cli@latest build --profile development --platform android`.
+     Install it on the phone from the link EAS gives you, then run `npx expo start` as usual.
+   - **Test build to share with colleagues** (Android `.apk`, no computer needed):
+     `npx eas-cli@latest build --profile preview --platform android`
+   - **Store build:** `npx eas-cli@latest build --profile production --platform android`
+     (and `--platform ios`, which needs an Apple Developer account, 99 USD/year).
+
+### Background recording — what the user sees
+
+- **Android:** a notification "Uudam таны замыг бичиж байна" stays while recording. Recording
+  keeps going even if the app is swiped away; open the app and press Зогсоох to stop. On some
+  phones (Xiaomi, Huawei, Samsung "battery optimisation") set Uudam's battery setting to
+  "No restrictions", otherwise the phone may stop it after a while.
+- **iPhone:** a blue location indicator shows in the status bar while recording.
+- Only the normal "While using the app" location permission is needed, because recording is always
+  started from the open app.
 
 ### Google Maps key (Android builds only)
 

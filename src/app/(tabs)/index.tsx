@@ -9,6 +9,7 @@ import { BasemapTiles, ImportedLayers } from '../../components/MapContent';
 import { colors } from '../../components/theme';
 import { formatAlt, formatCoord, formatDistance, formatDuration } from '../../geo/format';
 import { bearing, haversine, trackStats } from '../../geo/measure';
+import type { TrackPoint } from '../../geo/types';
 import { useData } from '../../state/data';
 import { useLocation } from '../../state/location';
 import { useSettings } from '../../state/settings';
@@ -28,6 +29,7 @@ export default function MapScreen() {
   const [now, setNow] = useState(Date.now());
   const centeredOnce = useRef(false);
   const [mapReady, setMapReady] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   // Tick once a second while recording so the timer updates.
   useEffect(() => {
@@ -64,12 +66,21 @@ export default function MapScreen() {
     mapRef.current?.animateCamera({ center: { latitude: loc.current.lat, longitude: loc.current.lon } }, { duration: 400 });
   };
 
-  const toggleRecording = () => {
-    if (!loc.recording) {
-      loc.startRecording();
-      return;
+  const toggleRecording = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (!loc.recording) {
+        await loc.startRecording();
+        return;
+      }
+      finishRecording(await loc.stopRecording());
+    } finally {
+      setBusy(false);
     }
-    const pts = loc.stopRecording();
+  };
+
+  const finishRecording = (pts: TrackPoint[]) => {
     if (pts.length < 2) {
       Alert.alert(t('map.saveTrackTitle'), t('map.tooShort'));
       loc.discardRecording();
@@ -168,13 +179,18 @@ export default function MapScreen() {
 
         <Pressable
           onPress={toggleRecording}
-          disabled={loc.permission !== 'granted'}
+          disabled={loc.permission !== 'granted' || busy}
           style={[styles.recordBtn, loc.recording && { backgroundColor: colors.record }]}
         >
           <MaterialCommunityIcons name={loc.recording ? 'stop' : 'record-circle-outline'} size={20} color="#fff" />
           <Text style={styles.recordText}>{loc.recording ? t('map.stop') : t('map.record')}</Text>
         </Pressable>
-        {!picked && <Text style={[styles.small, { textAlign: 'center', marginTop: 6 }]}>{t('map.longPressHint')}</Text>}
+        {loc.recordingMode && (
+          <Text style={[styles.small, { textAlign: 'center', marginTop: 6 }]}>
+            {loc.recordingMode === 'background' ? t('map.backgroundOn') : t('map.backgroundOff')}
+          </Text>
+        )}
+        {!picked && !loc.recording && <Text style={[styles.small, { textAlign: 'center', marginTop: 6 }]}>{t('map.longPressHint')}</Text>}
       </View>
 
       <BasemapPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} />

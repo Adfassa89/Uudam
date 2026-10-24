@@ -16,7 +16,7 @@ available in Settings. Code, comments and developer docs are in English.
 | **Base maps** | Satellite (Esri, Esri + labels, Google/Apple satellite & hybrid, Sentinel-2), street (OpenStreetMap, CARTO, Esri, Google/Apple), topographic / landscape (OpenTopoMap with contours, Esri topo, shaded relief, NatGeo, Google terrain), military (Soviet General Staff maps 1:200k – 1:25k), plus **your own tile servers** (e.g. a mine drone orthophoto). |
 | **Import** | **KML, KMZ, GPX** (already lat/lon). **DXF** with a coordinate-system dialog: WGS84, UTM 45N–50N (MONREF97), Pulkovo-1942 Gauss–Krüger zones 15–21 (with or without zone prefix), automatic guess, X/Y swap, CAD-layer filter, line simplification, arcs/bulges/circles/text/blocks. **DWG** is explained to the user (convert to DXF first — see below). |
 | **Position** | Live coordinates in UTM, decimal degrees or DMS; GPS elevation, accuracy, speed. Long-press any point → its coordinates, distance and bearing from you. |
-| **Route timeline** | Record routes (point every 1/5/10/25 m, poor GPS fixes filtered). Saved with timestamps, elevation, speed and accuracy, grouped by day. Detail page: map, distance, duration, ascent/descent, min/max elevation, speeds, **elevation profile**, full point log. Export **GPX** or **KML** (time-stamped, replays in Google Earth). Auto-saves during recording so a crash doesn't lose the route. |
+| **Route timeline** | Record routes (point every 1/5/10/25 m, poor GPS fixes filtered). Saved with timestamps, elevation, speed and accuracy, grouped by day. Detail page: map, distance, duration, ascent/descent, min/max elevation, speeds, **elevation profile**, full point log. Export **GPX** or **KML** (time-stamped, replays in Google Earth). **Keeps recording with the screen off** or the app in the background (Android shows a notification while recording). Every point is written to the phone immediately, so a crash or dead battery doesn't lose the route. |
 | **Offline** | On Android, every map tile you view is cached on the phone and works later without signal. Imported layers and routes are always stored on the phone. |
 
 ## Quick start
@@ -54,7 +54,7 @@ docs/                  Setup, maps & licensing, roadmap
 
 | Command | Purpose |
 | --- | --- |
-| `npm start` | Start the development server (open on phone with Expo Go) |
+| `npm start` | Start the development server (open on phone with Expo Go or the development build) |
 | `npm test` | Run automated tests (coordinate maths, KML/KMZ/DXF import) |
 | `npm run typecheck` | Check the code for type errors |
 

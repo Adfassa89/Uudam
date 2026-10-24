@@ -41,6 +41,10 @@ const mn: Translations = {
     saveTrackMessage: 'Бичсэн зам: {{distance}}, {{duration}}.',
     discard: 'Хаях',
     tooShort: 'Хадгалахад замын цэг хэтэрхий цөөн байна.',
+    notificationTitle: 'Uudam таны замыг бичиж байна',
+    notificationBody: 'Газрын зургийг нээхийн тулд дарна уу. Бичлэгийг програм дотроос зогсооно.',
+    backgroundOn: 'Дэлгэц унтарсан ч бичлэг үргэлжилнэ.',
+    backgroundOff: 'Програмыг нээлттэй байлгана уу: энд арын горимд бичих боломжгүй (жишээ нь Expo Go).',
   },
   basemaps: {
     satellite: 'Хиймэл дагуул',

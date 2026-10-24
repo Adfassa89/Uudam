@@ -38,6 +38,10 @@ const en = {
     saveTrackMessage: 'Route recorded: {{distance}}, {{duration}}.',
     discard: 'Discard',
     tooShort: 'The route has too few points to save.',
+    notificationTitle: 'Uudam is recording your route',
+    notificationBody: 'Tap to open the map. Stop recording in the app.',
+    backgroundOn: 'Recording continues with the screen off.',
+    backgroundOff: 'Keep the app open: background recording is not available here (e.g. in Expo Go).',
   },
   basemaps: {
     satellite: 'Satellite',

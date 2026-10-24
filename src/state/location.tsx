@@ -1,74 +1,112 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Location from 'expo-location';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { haversine, trackStats } from '../geo/measure';
+import { useTranslation } from 'react-i18next';
+import { AppState } from 'react-native';
+import { trackStats } from '../geo/measure';
 import type { TrackPoint } from '../geo/types';
 import * as store from '../storage/files';
+import * as recorder from '../tracking/recorder';
+import { MAX_ACCURACY_M } from '../tracking/points';
 import { useData } from './data';
 import { useSettings } from './settings';
 
-/** GPS fixes worse than this (metres) are not added to a recorded route. */
-const MAX_ACCURACY_M = 50;
-/** Save the in-progress route to disk every N new points. */
-const AUTOSAVE_EVERY = 10;
 const KEEP_AWAKE_TAG = 'uudam-recording';
 
 interface LocationCtx {
   permission: 'unknown' | 'granted' | 'denied';
   current: TrackPoint | null;
   recording: boolean;
+  /** 'background' keeps recording with the screen off; 'foreground' needs the app open. */
+  recordingMode: recorder.RecordingMode | null;
   points: TrackPoint[];
-  startRecording: () => void;
+  startRecording: () => Promise<void>;
   /** Stops recording and returns the points; call `saveRecording` or `discardRecording` next. */
-  stopRecording: () => TrackPoint[];
+  stopRecording: () => Promise<TrackPoint[]>;
   saveRecording: (name: string) => void;
   discardRecording: () => void;
 }
 
 const Ctx = createContext<LocationCtx | null>(null);
 
-const toPoint = (l: Location.LocationObject): TrackPoint => ({
-  lat: l.coords.latitude,
-  lon: l.coords.longitude,
-  alt: l.coords.altitude,
-  acc: l.coords.accuracy,
-  speed: l.coords.speed != null && l.coords.speed >= 0 ? l.coords.speed : null,
-  t: l.timestamp,
-});
-
 export function LocationProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const { settings } = useSettings();
   const { addTrack } = useData();
   const [permission, setPermission] = useState<LocationCtx['permission']>('unknown');
   const [current, setCurrent] = useState<TrackPoint | null>(null);
-  const [recording, setRecording] = useState(false);
+  const [recordingMode, setRecordingMode] = useState<recorder.RecordingMode | null>(null);
   const [points, setPoints] = useState<TrackPoint[]>([]);
-
-  // Refs so the GPS callback always sees fresh values without re-subscribing.
-  const recordingRef = useRef(false);
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const pointsRef = useRef<TrackPoint[]>([]);
-  const minDistRef = useRef(settings.recordDistanceM);
-  minDistRef.current = settings.recordDistanceM;
 
-  // Recover a route that was being recorded when the app was closed or crashed.
-  useEffect(() => {
-    const file = store.activeTrackFile();
-    if (!file.exists) return;
-    try {
-      const saved = JSON.parse(file.textSync()) as TrackPoint[];
-      if (saved.length > 0) {
-        pointsRef.current = saved;
-        setPoints(saved);
-        recordingRef.current = true;
-        setRecording(true);
-        activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
-      }
-    } catch {
-      file.delete();
-    }
+  const setAllPoints = useCallback((pts: TrackPoint[]) => {
+    pointsRef.current = pts;
+    setPoints(pts);
   }, []);
 
+  const notification = useCallback(() => ({ title: t('map.notificationTitle'), body: t('map.notificationBody') }), [t]);
+
+  const persistTrack = useCallback(
+    (pts: TrackPoint[], name: string) => {
+      if (pts.length < 2) return;
+      const id = store.newId();
+      const s = trackStats(pts);
+      store.saveTrackPoints(id, pts);
+      addTrack({
+        id,
+        name,
+        startedAt: pts[0].t,
+        endedAt: pts[pts.length - 1].t,
+        pointCount: pts.length,
+        distanceM: s.distanceM,
+        ascentM: s.ascentM,
+        descentM: s.descentM,
+        minAlt: s.minAlt,
+        maxAlt: s.maxAlt,
+      });
+    },
+    [addTrack],
+  );
+
+  // On start: continue a recording that was running when the app was closed or
+  // crashed, or keep a finished-but-unsaved route so it's never lost.
   useEffect(() => {
+    const pts = recorder.readActivePoints();
+    if (recorder.getRecordingState()) {
+      setAllPoints(pts);
+      recorder
+        .resumeRecording(notification())
+        .then((mode) => setRecordingMode(mode))
+        .catch(() => {});
+    } else if (pts.length > 0) {
+      persistTrack(pts, t('tracks.untitled', { date: new Date(pts[0].t).toLocaleString() }));
+      recorder.clearRecording();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // New points from the recorder (background task or on-screen GPS).
+  useEffect(() => recorder.subscribe((added) => setAllPoints([...pointsRef.current, ...added])), [setAllPoints]);
+
+  // Track whether the app is on screen; re-read points written while it was not.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      setAppActive(s === 'active');
+      if (s === 'active' && recorder.getRecordingState()) setAllPoints(recorder.readActivePoints());
+    });
+    return () => sub.remove();
+  }, [setAllPoints]);
+
+  // Keep the screen on only when recording cannot continue with the screen off.
+  useEffect(() => {
+    if (recordingMode === 'foreground') activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
+    else deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => {});
+  }, [recordingMode]);
+
+  // Live position for the map, only while the app is visible (saves battery).
+  useEffect(() => {
+    if (!appActive) return;
     let sub: Location.LocationSubscription | null = null;
     let cancelled = false;
     (async () => {
@@ -82,16 +120,9 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       sub = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 1 },
         (loc) => {
-          const p = toPoint(loc);
+          const p = recorder.toTrackPoint(loc);
           setCurrent(p);
-          if (!recordingRef.current) return;
-          if (p.acc != null && p.acc > MAX_ACCURACY_M) return;
-          const prev = pointsRef.current[pointsRef.current.length - 1];
-          if (prev && haversine(prev.lat, prev.lon, p.lat, p.lon) < minDistRef.current) return;
-          const next = [...pointsRef.current, p];
-          pointsRef.current = next;
-          setPoints(next);
-          if (next.length % AUTOSAVE_EVERY === 0) store.activeTrackFile().writeSync(JSON.stringify(next));
+          recorder.addForegroundFixes([p]);
         },
       );
       if (cancelled) sub.remove();
@@ -100,58 +131,49 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       sub?.remove();
     };
-  }, []);
+  }, [appActive]);
 
-  const startRecording = useCallback(() => {
-    pointsRef.current = current && (current.acc == null || current.acc <= MAX_ACCURACY_M) ? [current] : [];
-    setPoints(pointsRef.current);
-    recordingRef.current = true;
-    setRecording(true);
-    activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
-  }, [current]);
+  const startRecording = useCallback(async () => {
+    const first = current && (current.acc == null || current.acc <= MAX_ACCURACY_M) ? current : null;
+    setAllPoints([]);
+    const mode = await recorder.startRecording(settings.recordDistanceM, notification(), first);
+    setAllPoints(recorder.readActivePoints());
+    setRecordingMode(mode);
+  }, [current, settings.recordDistanceM, notification, setAllPoints]);
 
-  const stopRecording = useCallback(() => {
-    recordingRef.current = false;
-    setRecording(false);
-    deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => {});
-    return pointsRef.current;
-  }, []);
+  const stopRecording = useCallback(async () => {
+    const pts = await recorder.stopRecording();
+    setRecordingMode(null);
+    setAllPoints(pts);
+    return pts;
+  }, [setAllPoints]);
 
-  const clear = useCallback(() => {
-    pointsRef.current = [];
-    setPoints([]);
-    const f = store.activeTrackFile();
-    if (f.exists) f.delete();
-  }, []);
+  const discardRecording = useCallback(() => {
+    recorder.clearRecording();
+    setAllPoints([]);
+  }, [setAllPoints]);
 
   const saveRecording = useCallback(
     (name: string) => {
-      const pts = pointsRef.current;
-      if (pts.length >= 2) {
-        const id = store.newId();
-        const s = trackStats(pts);
-        store.saveTrackPoints(id, pts);
-        addTrack({
-          id,
-          name,
-          startedAt: pts[0].t,
-          endedAt: pts[pts.length - 1].t,
-          pointCount: pts.length,
-          distanceM: s.distanceM,
-          ascentM: s.ascentM,
-          descentM: s.descentM,
-          minAlt: s.minAlt,
-          maxAlt: s.maxAlt,
-        });
-      }
-      clear();
+      persistTrack(pointsRef.current, name);
+      discardRecording();
     },
-    [addTrack, clear],
+    [persistTrack, discardRecording],
   );
 
   const value = useMemo(
-    () => ({ permission, current, recording, points, startRecording, stopRecording, saveRecording, discardRecording: clear }),
-    [permission, current, recording, points, startRecording, stopRecording, saveRecording, clear],
+    () => ({
+      permission,
+      current,
+      recording: recordingMode != null,
+      recordingMode,
+      points,
+      startRecording,
+      stopRecording,
+      saveRecording,
+      discardRecording,
+    }),
+    [permission, current, recordingMode, points, startRecording, stopRecording, saveRecording, discardRecording],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

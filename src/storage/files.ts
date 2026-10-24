@@ -86,8 +86,13 @@ export function deleteTrackFiles(id: string) {
   if (f.exists) f.delete();
 }
 
-/** A route being recorded is saved here regularly so a crash or a dead battery doesn't lose it. */
-export const activeTrackFile = () => new File(tracksDir(), 'active.json');
+/**
+ * The route being recorded: one point per line, appended as GPS fixes arrive,
+ * so a crash, a dead battery or Android killing the app doesn't lose it.
+ */
+export const activeTrackFile = () => new File(tracksDir(), 'active.ndjson');
+/** Exists only while a recording is in progress; holds its settings (see tracking/recorder.ts). */
+export const recordingStateFile = () => new File(tracksDir(), 'recording.json');
 
 /** Directory where map tiles are cached for offline use (Android). */
 export function tileCacheDir(basemapId: string): string {
