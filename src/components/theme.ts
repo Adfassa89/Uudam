@@ -1,0 +1,66 @@
+import { StyleSheet } from 'react-native';
+
+export const colors = {
+  primary: '#1565c0',
+  danger: '#c62828',
+  record: '#e53935',
+  text: '#1a1a1a',
+  muted: '#6b6b6b',
+  border: '#d9d9d9',
+  bg: '#f5f6f8',
+  card: '#ffffff',
+};
+
+export const ui = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.bg },
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    padding: 14,
+    marginHorizontal: 12,
+    marginTop: 12,
+  },
+  h2: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 8 },
+  text: { fontSize: 14, color: colors.text },
+  muted: { fontSize: 13, color: colors.muted },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  button: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  outlineButton: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  outlineButtonText: { color: colors.primary, fontWeight: '600' },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: colors.text,
+    backgroundColor: '#fff',
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.text },
+  chipTextActive: { color: '#fff' },
+});

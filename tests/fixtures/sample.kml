@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Style id="red"><LineStyle><color>ff0000ff</color></LineStyle></Style>
+    <Placemark>
+      <name>Уурхайн оффис</name>
+      <Point><coordinates>105.9,43.6,1450</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Haul road</name>
+      <styleUrl>#red</styleUrl>
+      <LineString><coordinates>105.90,43.60,0 105.91,43.61,0 105.92,43.60,0</coordinates></LineString>
+    </Placemark>
+    <Placemark>
+      <name>Pit</name>
+      <Polygon><outerBoundaryIs><LinearRing><coordinates>105.9,43.6 105.95,43.6 105.95,43.65 105.9,43.6</coordinates></LinearRing></outerBoundaryIs></Polygon>
+    </Placemark>
+  </Document>
+</kml>
