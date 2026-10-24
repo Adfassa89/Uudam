@@ -1,5 +1,4 @@
 import { memo } from 'react';
-import { Platform } from 'react-native';
 import { Marker, Polygon, Polyline, UrlTile } from 'react-native-maps';
 import type { LonLat, MapFeature } from '../geo/types';
 import type { Basemap } from '../maps/basemaps';
@@ -21,8 +20,8 @@ export const BasemapTiles = memo(function BasemapTiles({ basemap }: { basemap: B
     maximumNativeZ: basemap.maxZoom ?? 19,
     flipY: basemap.tms ?? false,
     shouldReplaceMapContent: true,
-    // Android keeps viewed tiles on disk so they also show without internet.
-    tileCachePath: Platform.OS === 'android' ? tileCacheDir(basemap.id) : undefined,
+    // Viewed and downloaded tiles are kept on disk so they also show without internet.
+    tileCachePath: tileCacheDir(basemap.id),
     tileCacheMaxAge: 60 * 60 * 24 * 30,
   };
   return (
@@ -34,7 +33,7 @@ export const BasemapTiles = memo(function BasemapTiles({ basemap }: { basemap: B
           urlTemplate={basemap.overlay}
           zIndex={-1}
           {...common}
-          tileCachePath={Platform.OS === 'android' ? tileCacheDir(`${basemap.id}-overlay`) : undefined}
+          tileCachePath={tileCacheDir(`${basemap.id}-overlay`)}
         />
       ) : null}
     </>

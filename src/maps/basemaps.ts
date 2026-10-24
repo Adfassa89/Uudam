@@ -22,6 +22,11 @@ export interface Basemap {
   attribution: string;
   /** Only works on this platform. */
   platform?: 'android' | 'ios';
+  /**
+   * The provider's usage policy forbids bulk downloading for offline use.
+   * Viewed tiles are still cached; the "download area" button is disabled.
+   */
+  noBulkDownload?: boolean;
 }
 
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
@@ -83,6 +88,7 @@ export const BASEMAPS: Basemap[] = [
     category: 'street',
     tiles: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     maxZoom: 19,
+    noBulkDownload: true, // https://operations.osmfoundation.org/policies/tiles/
     attribution: '© OpenStreetMap contributors',
   },
   {
@@ -116,6 +122,7 @@ export const BASEMAPS: Basemap[] = [
     category: 'topo',
     tiles: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
     maxZoom: 17,
+    noBulkDownload: true, // volunteer-run server; asks apps not to mass-download
     attribution: '© OpenStreetMap contributors, SRTM, © OpenTopoMap (CC-BY-SA)',
   },
   {

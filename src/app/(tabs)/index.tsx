@@ -1,15 +1,19 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, Polyline, type LatLng } from 'react-native-maps';
+import { Alert, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import MapView, { Marker, Polyline, type LatLng, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BasemapPicker } from '../../components/BasemapPicker';
+import { DownloadAreaSheet } from '../../components/DownloadAreaSheet';
 import { BasemapTiles, ImportedLayers } from '../../components/MapContent';
 import { colors } from '../../components/theme';
 import { formatAlt, formatCoord, formatDistance, formatDuration } from '../../geo/format';
 import { bearing, haversine, trackStats } from '../../geo/measure';
 import type { TrackPoint } from '../../geo/types';
+import { cancelDownload } from '../../offline/downloader';
+import { zoomForRegion } from '../../offline/tiles';
+import { useOfflineAreas } from '../../offline/useOfflineAreas';
 import { useData } from '../../state/data';
 import { useLocation } from '../../state/location';
 import { useSettings } from '../../state/settings';
@@ -30,6 +34,11 @@ export default function MapScreen() {
   const centeredOnce = useRef(false);
   const [mapReady, setMapReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const [region, setRegion] = useState<Region>(INITIAL_REGION);
+  const { width } = useWindowDimensions();
+  const offline = useOfflineAreas();
+  const downloading = offline.areas.find((a) => a.id === offline.activeId);
 
   // Tick once a second while recording so the timer updates.
   useEffect(() => {
@@ -116,6 +125,7 @@ export default function MapScreen() {
         rotateEnabled
         toolbarEnabled={false}
         onMapReady={() => setMapReady(true)}
+        onRegionChangeComplete={setRegion}
         onLongPress={(e) => setPicked(e.nativeEvent.coordinate)}
       >
         <BasemapTiles basemap={basemap} />
@@ -133,6 +143,7 @@ export default function MapScreen() {
       <View style={[styles.sideButtons, { top: insets.top + 12 }]}>
         <RoundButton icon="layers-outline" onPress={() => setPickerOpen(true)} label={t('map.basemaps')} />
         <RoundButton icon="crosshairs-gps" onPress={centerOnMe} label={t('map.centerMe')} />
+        <RoundButton icon="download-outline" onPress={() => setDownloadOpen(true)} label={t('offline.title')} />
       </View>
 
       {picked && (
@@ -154,6 +165,19 @@ export default function MapScreen() {
       )}
 
       <View style={styles.panel}>
+        {downloading && (
+          <View style={[styles.rowBetween, styles.download]}>
+            <Text style={[styles.small, { flex: 1 }]} numberOfLines={1}>
+              {t('offline.progress', {
+                name: downloading.name,
+                percent: Math.floor(((downloading.doneCount + downloading.failedCount) / Math.max(1, downloading.tileCount)) * 100),
+              })}
+            </Text>
+            <Pressable onPress={cancelDownload} hitSlop={10}>
+              <Text style={{ color: colors.danger, fontWeight: '600' }}>{t('common.cancel')}</Text>
+            </Pressable>
+          </View>
+        )}
         {loc.permission === 'denied' ? (
           <Text style={styles.small}>{t('map.permissionDenied')}</Text>
         ) : cur ? (
@@ -194,6 +218,17 @@ export default function MapScreen() {
       </View>
 
       <BasemapPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} />
+      <DownloadAreaSheet
+        visible={downloadOpen}
+        onClose={() => setDownloadOpen(false)}
+        bbox={{
+          minLat: region.latitude - region.latitudeDelta / 2,
+          maxLat: region.latitude + region.latitudeDelta / 2,
+          minLon: region.longitude - region.longitudeDelta / 2,
+          maxLon: region.longitude + region.longitudeDelta / 2,
+        }}
+        zoom={zoomForRegion(region.longitudeDelta, width)}
+      />
     </View>
   );
 }
@@ -248,6 +283,7 @@ const styles = StyleSheet.create({
     padding: 10,
     elevation: 3,
   },
+  download: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, paddingBottom: 6, marginBottom: 6 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTitle: { fontWeight: '600', color: colors.text },
   panel: {

@@ -3,10 +3,13 @@ import { Directory, Paths } from 'expo-file-system';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { formatBytes } from '../../components/DownloadAreaSheet';
 import { colors, ui } from '../../components/theme';
 import type { CoordFormat } from '../../geo/format';
 import { LANGUAGES } from '../../i18n';
 import type { Basemap } from '../../maps/basemaps';
+import { cancelDownload, deleteArea, forgetAllAreas, resumeDownload, type OfflineArea } from '../../offline/downloader';
+import { useOfflineAreas } from '../../offline/useOfflineAreas';
 import { useSettings } from '../../state/settings';
 import { newId } from '../../storage/files';
 
@@ -37,7 +40,9 @@ function Chips<T extends string | number>({
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
-  const { settings, update } = useSettings();
+  const { settings, update, allBasemaps } = useSettings();
+  const offline = useOfflineAreas();
+  const basemapOf = (a: OfflineArea) => allBasemaps.find((b) => b.id === a.basemapId);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [tms, setTms] = useState(false);
@@ -67,11 +72,26 @@ export default function SettingsScreen() {
   const removeCustom = (id: string) =>
     update({ customBasemaps: settings.customBasemaps.filter((b) => b.id !== id) });
 
-  const clearCache = () => {
-    const dir = new Directory(Paths.document, 'tiles');
-    if (dir.exists) dir.delete();
-    Alert.alert(t('settings.offline'), t('settings.cacheCleared'));
-  };
+  const clearCache = () =>
+    Alert.alert(t('settings.clearCache'), t('offline.clearConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: () => {
+          forgetAllAreas();
+          const dir = new Directory(Paths.document, 'tiles');
+          if (dir.exists) dir.delete();
+          Alert.alert(t('settings.offline'), t('settings.cacheCleared'));
+        },
+      },
+    ]);
+
+  const confirmDeleteArea = (a: OfflineArea) =>
+    Alert.alert(t('offline.deleteConfirm', { name: a.name }), undefined, [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => void deleteArea(a.id, basemapOf(a)) },
+    ]);
 
   return (
     <ScrollView style={ui.screen} contentContainerStyle={{ paddingBottom: 32 }}>
@@ -139,7 +159,48 @@ export default function SettingsScreen() {
       <View style={ui.card}>
         <Text style={ui.h2}>{t('settings.offline')}</Text>
         <Text style={[ui.muted, { marginBottom: 8 }]}>{t('settings.offlineHelp')}</Text>
-        <Pressable style={ui.outlineButton} onPress={clearCache}>
+        {offline.areas.length === 0 && <Text style={[ui.muted, { marginBottom: 8 }]}>{t('offline.empty')}</Text>}
+        {offline.areas.map((a) => {
+          const b = basemapOf(a);
+          const isActive = offline.activeId === a.id;
+          const percent = Math.floor(((a.doneCount + a.failedCount) / Math.max(1, a.tileCount)) * 100);
+          return (
+            <View key={a.id} style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+              <Text style={[ui.text, { fontWeight: '600' }]} numberOfLines={1}>
+                {a.name}
+              </Text>
+              <Text style={ui.muted}>
+                {b ? (b.name ?? t(`basemaps.${b.nameKey}`)) : '—'} · z{a.minZoom}–{a.maxZoom} · {formatBytes(a.bytes)}
+              </Text>
+              <Text style={[ui.muted, a.status !== 'done' && !isActive && { color: colors.danger }]}>
+                {isActive
+                  ? t('offline.statusDownloading', { percent })
+                  : a.status === 'done'
+                    ? t('offline.statusDone', { count: a.doneCount })
+                    : t('offline.statusPartial', { done: a.doneCount, total: a.tileCount, failed: a.failedCount })}
+              </Text>
+              <View style={[ui.row, { gap: 16, marginTop: 4 }]}>
+                {isActive ? (
+                  <Pressable onPress={cancelDownload}>
+                    <Text style={{ color: colors.danger }}>{t('common.cancel')}</Text>
+                  </Pressable>
+                ) : (
+                  <>
+                    {a.status !== 'done' && b && !offline.activeId && (
+                      <Pressable onPress={() => resumeDownload(a.id, b)}>
+                        <Text style={{ color: colors.primary }}>{t('offline.resume')}</Text>
+                      </Pressable>
+                    )}
+                    <Pressable onPress={() => confirmDeleteArea(a)}>
+                      <Text style={{ color: colors.danger }}>{t('common.delete')}</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            </View>
+          );
+        })}
+        <Pressable style={[ui.outlineButton, { marginTop: 10 }]} onPress={clearCache}>
           <Text style={ui.outlineButtonText}>{t('settings.clearCache')}</Text>
         </Pressable>
       </View>

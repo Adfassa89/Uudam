@@ -40,7 +40,23 @@ The same steps work for **drone orthophotos** of the pit or a mine survey base m
 
 ## Offline use in the pit
 
-On Android each tile is saved in the app's storage after it is viewed (`tileCachePath`) and reused
-without internet for 30 days, then refreshed when online. Before going to an area without signal,
-pan and zoom over it once with the chosen base map. iOS caching and "download area" are on the
-[roadmap](ROADMAP.md).
+Two mechanisms, on both Android and iOS:
+
+1. **Automatic cache** — every tile you look at is saved on the phone (`tileCachePath`) and shown
+   again without internet.
+2. **Download an area** — on the map, frame the area (e.g. the whole licence area plus haul roads),
+   press the download button, choose the most detailed level (each level shows metres per pixel),
+   and press **Татах**. The app downloads all tiles from zoom 3 up to the chosen level into the same
+   cache folder. Progress is shown on the map; areas can be resumed or deleted in **Тохиргоо**.
+
+Limits and behaviour:
+
+- Max 30 000 tiles per area (≈ 0.5–1 GB of imagery). Example, a 5 × 5 km pit: up to z16
+  (≈ 1.7 m/pixel) ≈ 250 tiles / 5 MB; z17 (≈ 0.9 m/pixel) ≈ 830 tiles / 17 MB;
+  z18 (≈ 0.4 m/pixel) ≈ 2 900 tiles / 60 MB. Each extra level is about 4× more.
+- OpenStreetMap and OpenTopoMap forbid bulk downloading, so the button is disabled for them.
+  Google/Apple native maps cannot be downloaded at all.
+- Cached tiles are refreshed after 30 days when online; without internet the old tile keeps showing.
+- **Licences:** downloading areas from Esri, CARTO or the nakarte.me military maps is fine for
+  testing, but a published app needs the provider's permission or a paid plan that allows offline
+  use — or, best for a mine, your own tile server (see above).
