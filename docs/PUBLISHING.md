@@ -25,9 +25,9 @@ terminal inside the `uudam` folder.
    Play Console → *App integrity* for the store version). **API restrictions:** Maps SDK for Android.
 5. Store the key in Expo (never in git):
    ```bash
-   npx eas-cli@latest env:create --name GOOGLE_MAPS_ANDROID_API_KEY --value YOUR_KEY \
-     --environment development --environment preview --environment production --visibility sensitive
+   npx eas-cli@latest env:set --name GOOGLE_MAPS_ANDROID_API_KEY --value YOUR_KEY --environment development --environment preview --environment production --visibility sensitive
    ```
+   Check it with `npx eas-cli@latest env:list preview` (the value is hidden, that's normal).
 
 The Maps SDK for Android is free to use for showing maps in apps.
 
